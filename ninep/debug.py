@@ -1,4 +1,3 @@
-
 #!/usr/bin/python
 
 def exceptions(type, value, tb) :
