@@ -10,10 +10,10 @@ import socket
 import random
 from Crypto.Cipher import DES
 
-import P9
+import ninep.ninep
 
 
-class Error(P9.Error) : pass
+class Error(ninep.Error) : pass
 class AuthError(Error) : pass
 class AuthsrvError(Error) : pass
 
@@ -71,7 +71,7 @@ def makeKey(password) :
 	"""
 	password = password[:28-1] + '\0'
 	n = len(password) - 1
-	password = P9.pad(password, 28, ' ')
+	password = ninep.pad(password, 28, ' ')
 	buf = list(password)
 	while 1 :
 		t = map(ord, buf[:8])
@@ -95,7 +95,7 @@ def randChars(n) :
 	return "".join([chr(random.randint(0,255)) for x in xrange(n)])
 
 
-class Marshal(P9.Marshal) :
+class Marshal(ninep.Marshal) :
 	def __init__(self) :
 		self.ks = None
 		self.kn = None
@@ -127,7 +127,7 @@ class Marshal(P9.Marshal) :
 			self.bytes[idx : idx+8] = ldecrypt(key, self.bytes[idx : idx+8])
 
 	def _encPad(self, x, l) :
-		self._encX(P9.pad(x, l))
+		self._encX(ninep.pad(x, l))
 	def _decPad(self, l) :
 		x = self._decX(l)
 		idx = x.find('\0')
@@ -199,7 +199,7 @@ def getTicket(con, sk1, treq) :
 	"""
 	Connect to the auth server and request a set of tickets.
 	Con is an open handle to the auth server, sk1 is a handle
-	to a P9sk1 marshaller with Kc set and treq is a ticket request.
+	to a ninepsk1 marshaller with Kc set and treq is a ticket request.
 	Return the (opaque) server ticket and the (decoded) client ticket.
 	Raises an AuthsrvError on failure.
 	"""
@@ -223,7 +223,7 @@ def getTicket(con, sk1, treq) :
 def clientAuth(cl, afid, user, Kc, authsrv, authport=567) :
 	"""
 	Authenticate ourselves to the server.
-	Cl is a P9 RpcClient, afid is the fid to use, user is the
+	Cl is a ninep RpcClient, afid is the fid to use, user is the
 	user name, Kc is the user's key, authsrv and authport specify
 	the auth server to use for requesting tickets.
 

@@ -5,16 +5,15 @@ import socket
 import os.path
 import copy
 
-import P9
-import P9sk1
+from ninep import ninep, sk1
 
 nochg2 = 0xffff
 nochg4 = 0xffffffffL
 nochg8 = 0xffffffffffffffffL
 nochgS = ''
 
-ServError = P9.ServError
-class Error(P9.Error) : pass
+ServError = ninep.ServError
+class Error(ninep.Error) : pass
 #class ServError(Exception) : pass
 
 def normpath(p) :
@@ -110,7 +109,7 @@ class File(object) :
     def getQid(self) :
         type = self.dev.type
         if self.isdir :
-            type |= P9.QDIR
+            type |= ninep.QDIR
         return type,0,hash8(self.path)
 
     def walk(self, n) :
@@ -184,7 +183,7 @@ class File(object) :
                     s = fn._statd(d)
                     self.dirlist.append(s)
         # otherwise assume we continue where we left off
-        p9 = P9.Marshal9P(None)
+        p9 = ninep.Marshal9P(None)
         p9.setBuf()
         while self.dirlist :
             # Peeking into our abstractions here.  Proceed cautiously.
@@ -219,7 +218,7 @@ class AuthFs(object) :
     cancreate = 0
 
     def __init__(self, user, dom, key) :
-        self.sk1 = P9sk1.Marshal()
+        self.sk1 = sk1.Marshal()
         self.user = user
         self.dom = dom
         self.ks = key
@@ -227,10 +226,10 @@ class AuthFs(object) :
     def estab(self, f, isroot) :
         f.isdir = 0
         f.odev = self
-        f.CHs = P9sk1.randChars(8)
+        f.CHs = sk1.randChars(8)
         f.CHc = None
         f.suid = None
-        f.treq = [P9sk1.AuthTreq, self.user, self.dom, f.CHs, '', '']
+        f.treq = [sk1.AuthTreq, self.user, self.dom, f.CHs, '', '']
         f.phase = self.HaveProtos
 
     def _invalid(self, *args) :
@@ -256,7 +255,7 @@ class AuthFs(object) :
             return self.sk1.getBuf()
         elif f.phase == self.HaveSauth :
             f.phase = self.Success
-            self.sk1._encAuth([P9sk1.AuthAs, f.CHc, 0])
+            self.sk1._encAuth([sk1.AuthAs, f.CHc, 0])
             return self.sk1.getBuf()
         raise ServError("unexpected phase")
 
@@ -278,25 +277,25 @@ class AuthFs(object) :
         elif f.phase == self.NeedTicket :
             self.sk1.setKs(self.ks)
             num,chal,cuid,suid,key = self.sk1._decTicket()
-            if num != P9sk1.AuthTs or chal != f.CHs :
+            if num != sk1.AuthTs or chal != f.CHs :
                 raise ServError("bad ticket")
             self.sk1.setKn(key)
             num,chal,id = self.sk1._decAuth()
-            if num != P9sk1.AuthAc or chal != f.CHs or id != 0 :
+            if num != sk1.AuthAc or chal != f.CHs or id != 0 :
                 raise ServError("bad authentication for %s" % suid)
             f.suid = suid
             f.phase = self.HaveSauth
             return 72 + 13
         raise ServError("unexpected phase")
 
-class Server(P9.RpcServer) :
+class Server(ninep.RpcServer) :
     """
     A tiny 9p server.
     """
     BUFSZ = 8320
 
     def __init__(self, fd, user, dom, key) :
-        P9.RpcServer.__init__(self, fd)
+        ninep.RpcServer.__init__(self, fd)
 
         self.authfs = AuthFs(user, dom, key)
         self.root = File('/')
@@ -332,7 +331,7 @@ class Server(P9.RpcServer) :
 
     def _srvTversion(self, type, tag, vals) :
         bufsz,vers = vals
-        if vers != P9.version :
+        if vers != ninep.version :
             raise ServError("unknown version %r" % vers)
         if bufsz > self.BUFSZ :
             bufsz = self.BUFSZ
@@ -413,7 +412,7 @@ class Server(P9.RpcServer) :
         obj.wstat(stats[0])
         return None,
 
-def sockserver(user, dom, key, port=P9.PORT) :
+def sockserver(user, dom, key, port=ninep.PORT) :
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(('0.0.0.0', port),)
@@ -429,10 +428,10 @@ def sockserver(user, dom, key, port=P9.PORT) :
 
     try :
         print "serving: %r,%r" % addr
-        s = Server(P9.Sock(sock2), user, dom, key) 
+        s = Server(ninep.Sock(sock2), user, dom, key) 
         s.serve()
         print "done serving %r,%r" % addr
-    except P9.Error,e :
+    except ninep.Error,e :
         print e.args[0]
 
 def usage(prog) :
@@ -443,7 +442,7 @@ def main(prog, *args) :
     import getopt
     import getpass
 
-    port = P9.PORT
+    port = ninep.PORT
     root = '/'
     mods = []
     try :
@@ -467,7 +466,7 @@ def main(prog, *args) :
     user = args[0]
     dom = args[1]
     passwd = getpass.getpass()
-    key = P9sk1.makeKey(passwd)
+    key = sk1.makeKey(passwd)
 
     for m in mods :
         x = __import__(m)

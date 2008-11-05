@@ -426,7 +426,7 @@ class RpcServer(object) :
 			pass
 
 
-class Client(object) :
+class NinepClient(object) :
 	"""
 	A tiny 9p client.
 	"""
@@ -436,32 +436,32 @@ class Client(object) :
 	F = 13
 
 	def __init__(self, fd, user, passwd, authsrv) :
-		self.rpc = P9.RpcClient(fd)
+		self.rpc = ninep.RpcClient(fd)
 		self.login(user, passwd, authsrv)
 
 	def login(self, user, passwd, authsrv) :
-		maxbuf,vers = self.rpc.version(16 * 1024, P9.version)
-		if vers != P9.version :
+		maxbuf,vers = self.rpc.version(16 * 1024, ninep.version)
+		if vers != ninep.version :
 			raise Error("version mismatch: %r" % vers)
 
 		afid = self.AFID
 		try :
 			self.rpc.auth(afid, user, '')
 			needauth = 1
-		except P9.RpcError,e :
-			afid = P9.nofid
+		except ninep.RpcError,e :
+			afid = ninep.nofid
 
-		if afid != P9.nofid :
+		if afid != ninep.nofid :
 			if passwd is None :
 				raise Error("Password required")
 
-			import P9sk1
+			import ninepsk1
 			try :
-				P9sk1.clientAuth(self.rpc, afid, user, P9sk1.makeKey(passwd), authsrv, P9sk1.AUTHPORT)
+				ninepsk1.clientAuth(self.rpc, afid, user, ninepsk1.makeKey(passwd), authsrv, ninepsk1.AUTHPORT)
 			except socket.error,e :
 				raise Error("%s: %s" % (authsrv, e.args[1]))
 		self.rpc.attach(self.ROOT, afid, user, "")
-		if afid != P9.nofid :
+		if afid != ninep.nofid :
 			self.rpc.clunk(afid)
 		self.rpc.walk(self.ROOT, self.CWD, [])
 
@@ -482,7 +482,7 @@ class Client(object) :
 			path = filter(None, path)
 		try : 
 			w = self.rpc.walk(root, self.F, path)
-		except P9.RpcError,e :
+		except ninep.RpcError,e :
 			print "%s: %s" % (pstr, e.args[0])
 			return
 		if len(w) < len(path) :
@@ -502,9 +502,9 @@ class Client(object) :
 		self.pos = 0L
 		try :
 			return self.rpc.create(self.F, name, perm, mode)
-		except P9.RpcError,e :
+		except ninep.RpcError,e :
 			self._close()
-			raise P9.RpcError(e.args[0])
+			raise ninep.RpcError(e.args[0])
 	def _read(self, l) :
 		buf = self.rpc.read(self.F, self.pos, l)
 		self.pos += len(buf)
@@ -545,7 +545,7 @@ class Client(object) :
 		q = self._walk(pstr)
 		if q is None :
 			return
-		if q and not (q[-1][0] & P9.QDIR) :
+		if q and not (q[-1][0] & ninep.QDIR) :
 			print "%s: not a directory" % pstr
 			self._close()
 			return
@@ -553,7 +553,7 @@ class Client(object) :
 		self._close()
 
 	def mkdir(self, pstr, perm=0644) :
-		self._create(pstr, perm | P9.DIR)
+		self._create(pstr, perm | ninep.DIR)
 		self._close()
 
 	def cat(self, name, out=None) :
@@ -572,7 +572,7 @@ class Client(object) :
 			inf = sys.stdin
 		x = self._create(name)
 		if x is None :
-			x = self._open(name, P9.OWRITE|P9.OTRUNC)
+			x = self._open(name, ninep.OWRITE|ninep.OTRUNC)
 			if x is None :
 				return
 		sz = 1024

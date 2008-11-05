@@ -7,7 +7,7 @@ __docformat__ = 'plaintext'
 __all__ = []
 for subpackage in [
     'ninep',
-    'ninepsk1',
+    'sk1',
     ]:
     try: 
         exec 'import ' + subpackage

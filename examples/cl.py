@@ -3,17 +3,16 @@
 import socket
 import sys
 
-import ninep
-import ninep/client
+from ninep import ninep
 
-class Error(P9.Error) : pass
+class Error(ninep.Error) : pass
 
 def modeStr(mode) :
 	bits = ["---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"]
 	def b(s) :
 		return bits[(mode>>s) & 7]
 	d = "-"
-	if mode & P9.DIR :
+	if mode & ninep.DIR :
 		d = "d"
 	return "%s%s%s%s" % (d, b(6), b(3), b(0))
 
@@ -25,7 +24,7 @@ def _os(func, *args) :
 	except IOError,e :
 		raise Error(e.args[1])
 	
-class CmdClient(P9Client.Client) :
+class CmdClient(NinepClient.Client) :
 	"""command line driven access to the client"""
 	def _cmdstat(self, args) :
 		for a in args :
@@ -128,7 +127,7 @@ class CmdClient(P9Client.Client) :
 			if cmd in cmdf :
 				try :
 					cmdf[cmd](args)
-				except P9.Error,e :
+				except ninep.Error,e :
 					print "%s: %s" % (cmd, e.args[0])
 			else :
 				sys.stdout.write("%s ?\n" % cmd)
@@ -144,7 +143,7 @@ def main(prog, *args) :
 	import getpass
 
 	authsrv = None
-	port = P9.PORT
+	port = ninep.PORT
 	try :
 		opt,args = getopt.getopt(args, "a:dnp:")
 	except :
@@ -178,9 +177,9 @@ def main(prog, *args) :
 	if passwd is not None :
 		passwd = getpass.getpass()
 	try :
-		cl = CmdClient(P9.Sock(sock), user, passwd, authsrv)
+		cl = CmdClient(ninep.Sock(sock), user, passwd, authsrv)
 		cl.cmdLoop(cmd)
-	except P9.Error,e :
+	except ninep.Error,e :
 		print e
 
 if __name__ == "__main__" :
