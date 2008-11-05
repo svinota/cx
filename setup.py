@@ -8,10 +8,10 @@ setup(name='9P',
     author='Andrey Mirtchovski',
     author_email='aamirtch@ucalgary.ca',
     url='http://grid.ucalgary.ca',
-    packages=['P9'],
+    packages=['ninep'],
     scripts=[
-        'P9/srv.py',
-        'P9/cl.py',
+        'examples/srv.py',
+        'examples/cl.py',
         ]
       
     )
