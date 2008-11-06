@@ -1,5 +1,6 @@
-import py9p.server as py9pserver
-from py9p import sk1
+import py9p
+import py9psrv
+import py9psk1
 
 class AuthFs(object) :
     """

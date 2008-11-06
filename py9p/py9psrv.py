@@ -1,6 +1,23 @@
 #!/usr/bin/python
 
-from py9p import py9p
+import py9p
+
+(    Ebadoffset,
+    Ebotch,
+    Ecreatenondir,
+    Edupfid,
+    Eduptag,
+    Eisdir,
+    Enocreate,
+    Enoremove,
+    Enostat,
+    Enotfound,
+    Enowstat,
+    Eperm,
+    Eunknownfid,
+    Ebaddir,
+    Ewalknodir,
+) = range(0, 15)
 
 errors = {
     Ebadoffset: "bad offset",
