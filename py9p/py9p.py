@@ -18,7 +18,7 @@ def _enumCmd(*args) :
 _enumCmd("version", "auth", "attach", "error", "flush", "walk", "open",
 		"create", "read", "write", "clunk", "remove", "stat", "wstat")
 
-VERSION = "9P2000"
+VERSION = "9P2000" # also accept 9p2000.u
 NOTAG = 0xffff
 NOFID = 0xffffffffL
 
@@ -28,6 +28,12 @@ OREAD,OWRITE,ORDWR,OEXEC = range(4)
 OTRUNC,ORCLOSE = 0x10,0x40
 
 PORT = 564
+
+nochg2 = 0xffff
+nochg4 = 0xffffffffL
+nochg8 = 0xffffffffffffffffL
+nochgS = ''
+
 
 
 def pad(str, l, padch='\0') :
@@ -215,8 +221,7 @@ class Marshal9P(Marshal) :
 	}
 	verbose = 1 # protocol level verbosity
 
-	def __init__(self, fd) :
-		self.fd = fd
+	def __init__(self) :
 		self._prep(self.msgFmt)
 
 	def _checkType(self, t) :
@@ -226,7 +231,7 @@ class Marshal9P(Marshal) :
 		if len(self.bytes) :
 			raise Error("Extra information in message: %r" % self.bytes)
 
-	def send(self, type, tag, *args) :
+	def send(self, fd, type, tag, *args) :
 		"Format and send a message"
 		self.setBuf()
 		self._checkType(type)
@@ -237,15 +242,15 @@ class Marshal9P(Marshal) :
 		self.bytes = self.bytes[-4:] + self.bytes[:-4]
 		if self.verbose :
 			print "-->", type, tag, repr(args)
-		self.fd.write(self.getBuf())
+		fd.write(self.getBuf())
 
-	def recv(self) :
+	def recv(self, fd) :
 		"Read and decode a message"
-		self.setBuf(self.fd.read(4))
+		self.setBuf(fd.read(4))
 		size = self._dec4()
 		if size > self.MAXSIZE or size < 4 :
 			raise Error("Bad message size: %d" % size)
-		self.setBuf(self.fd.read(size - 4))
+		self.setBuf(fd.read(size - 4))
 		type,tag = self._dec1(),self._dec2()
 		self._checkType(type)
 		rest = _applyFuncs(self.msgDecodes[type])

@@ -2,46 +2,6 @@
 
 import py9p
 
-(    Ebadoffset,
-    Ebotch,
-    Ecreatenondir,
-    Edupfid,
-    Eduptag,
-    Eisdir,
-    Enocreate,
-    Enoremove,
-    Enostat,
-    Enotfound,
-    Enowstat,
-    Eperm,
-    Eunknownfid,
-    Ebaddir,
-    Ewalknodir,
-) = range(0, 15)
-
-errors = {
-    Ebadoffset: "bad offset",
-    Ebotch: "9P protocol botch",
-    Ecreatenondir: "create in non-directory",
-    Edupfid: "duplicate fid",
-    Eduptag: "duplicate tag",
-    Eisdir: "is a directory",
-    Enocreate: "create prohibited",
-    Enoremove: "remove prohibited",
-    Enostat: "stat prohibited",
-    Enotfound: "file not found",
-    Enowstat: "wstat prohibited",
-    Eperm: "permission denied",
-    Eunknownfid: "unknown fid",
-    Ebaddir: "bad directory in wstat",
-    Ewalknodir: "walk in non-directory",
-}
-
-nochg2 = 0xffff
-nochg4 = 0xffffffffL
-nochg8 = 0xffffffffffffffffL
-nochgS = ''
-
 ServError = py9p.ServError
 class Error(py9p.Error) : pass
 
@@ -60,38 +20,50 @@ def _nf(func, *args) :
         return
 
 
-class py9pserver(object) :
+class py9netsrv(object) :
     """
     A server interface to the protocol.
     Subclass this to provide service
     """
 
     verbose = 1 # server level verbosity
-
-    BUFSZ = 8320
+    BUFSZ = 8320    # will be negotiated during Version exchanges
 
     # maps path names to filesystem objects
     mountTable = {}
     klasses = {}
+    readpool = []
+    sock = None
 
-    def __init__(self, fd) :
-        self.msg = Marshal9P(fd)
+    def uidname(u) :            # XXX
+        return "%d" % u
+    gidname = uidname           # XXX
 
-    def _err(self, tag, msg) :
+
+    def __init__(self, host='0.0.0.0', port=py9p.PORT, user=None, dom=None) :
+        self.msg = Marshal9P()
+        self.user = user
+        self.dom = dom
+        self.port = port
+        self.authfs = None
+
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind((host, port),)
+        self.sock.listen(5)
+        selectpool.append(self.sock)
+
+    def _err(self, fd, tag, msg) :
         print 'Error', msg        # XXX
         if self.verbose :
             print cmdName[Rerror], repr(msg)
-        self.msg.send(Rerror, tag, msg)
+        self.msg.send(fd, Rerror, tag, msg)
 
     def normpath(p) :
         return os.path.normpath(os.path.abspath(p))
 
     def hash8(obj) :
         return abs(hash(obj))
-
-    def uidname(u) :            # XXX
-        return "%d" % u
-    gidname = uidname           # XXX
 
     def mount(path, obj) :
         """
@@ -111,14 +83,12 @@ class py9pserver(object) :
         mountTable[path].append(obj)
         klasses[k] = 1
 
-
-
-    def rpc(self) :
+    def rpc(self, fd) :
         """
         Process a single RPC message.
         Return -1 on error.
         """
-        type,tag,vals = self.msg.recv()
+        type,tag,vals = self.msg.recv(fd)
         if type not in cmdName :
             return self._err(tag, "Invalid message")
         name = "_srv" + cmdName[type]
@@ -129,11 +99,11 @@ class py9pserver(object) :
             try :
                 rvals = func(type, tag, vals)
             except ServError,e :
-                self._err(tag, e.args[0])
+                self._err(fd, tag, e.args[0])
                 return 1                    # nonfatal
             if self.verbose :
                 print cmdName[type+1], repr(rvals)
-            self.msg.send(type + 1, tag, *rvals)
+            self.msg.send(fd, type + 1, tag, *rvals)
         else :
             return self._err(tag, "Unhandled message: %s" % cmdName[type])
         return 1
@@ -171,20 +141,36 @@ class py9pserver(object) :
             self.BUFSZ = bufsz
         return bufsz,vers
 
-    def _srvTauth(self, type, tag, vals) :
-        
-        fid,uname,aname = vals
-        obj = File('#a', self.authfs)
-        self._setFid(fid, obj)
-        return (obj.getQid(),)
+        def _srvTauth(self, type, tag, vals) :
+            fid,uname,aname = vals
+            if self.authfs == None:
+                if uname == 'none':
+                    raise ServError("user 'none' requires no authentication")
+                else:
+                    raise ServError("no auth info: access allowed to user 'none' only")
 
-    def _srvTattach(self, type, tag, vals) :
-        fid,afid,uname,aname = vals
-        a = self._getFid(afid)
-        if a.suid != uname :
-            raise ServError("not authenticated as %r" % uname)
-        r = self._setFid(fid, self.root.dup())
-        return (r.getQid(),)
+            obj = File('#a', self.authfs)
+            self._setFid(fid, obj)
+            return (obj.getQid(),)
+
+        def _srvTattach(self, type, tag, vals) :
+            fid,afid,uname,aname = vals
+
+            # permit none to login for anonymous servers
+            if uname == 'none':
+                if self.authfs != None:
+                    raise ServError("user 'none' not permitted to attach")
+            else:
+                if self.authfs == None:
+                    raise ServError("only user 'none' allowed on non-auth servers")
+                try:
+                    a = self._getFid(afid)
+                except ServError, e:
+                    raise ServError("auth fid missing: authentication not complete")
+                if a.suid != uname :
+                    raise ServError("not authenticated as %r" % uname)
+            r = self._setFid(fid, self.root.dup())
+            return (r.getQid(),)
 
     def _srvTflush(self, type, tag, vals) :
         return ()
@@ -247,8 +233,18 @@ class py9pserver(object) :
         return None,
 
     def serve(self) :
-        while self.rpc() :
-            pass
+        while len(self.readpool) > 0:
+            inr, outr, excr = select.select(self.readpool, [], [])
+            for s in inr:
+                if s == s.sock:
+                    cl, addr = server.accept()
+                    self.readpool.apped(client)
+                else:
+                    try:
+                        self.rpc(s)
+                    except:
+                        print "socket closed"
+                        self.readpool.remove(s)
 
-
-
+        print "no more client left; main socket closed"
+        return

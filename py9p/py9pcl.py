@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
-from ninep import proto
+import py9p
+import py9psk1
 
 class ninepclient(object) :
     """
@@ -83,7 +84,6 @@ class NinepClient(object) :
             if passwd is None :
                 raise Error("Password required")
 
-            from ninep import sk1
             try :
                 sk1.clientAuth(self.rpc, afid, user, ninep.sk1.makeKey(passwd), authsrv, ninepsk1.AUTHPORT)
             except socket.error,e :

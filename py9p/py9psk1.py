@@ -10,7 +10,7 @@ import socket
 import random
 from Crypto.Cipher import DES
 
-from py9p import py9p
+import py9p
 
 class Error(py9p.Error) : pass
 class AuthError(Error) : pass
