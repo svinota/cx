@@ -18,9 +18,9 @@ def _enumCmd(*args) :
 _enumCmd("version", "auth", "attach", "error", "flush", "walk", "open",
 		"create", "read", "write", "clunk", "remove", "stat", "wstat")
 
-version = "9P2000"
-notag = 0xffff
-nofid = 0xffffffffL
+VERSION = "9P2000"
+NOTAG = 0xffff
+NOFID = 0xffffffffL
 
 DIR = 020000000000L
 QDIR = 0x80
@@ -182,7 +182,7 @@ class Marshal(object) :
 
 
 class Marshal9P(Marshal) :
-	MAXSIZE = 1024 * 1024			# XXX
+	MAXSIZE = 1024 * 1024
 	msgFmt = {
 		Tversion: "4S",
 		Rversion: "4S",
@@ -213,7 +213,7 @@ class Marshal9P(Marshal) :
 		Twstat: "4[Stat]",
 		Rwstat: "",
 	}
-	verbose = 1
+	verbose = 1 # protocol level verbosity
 
 	def __init__(self, fd) :
 		self.fd = fd
@@ -236,7 +236,7 @@ class Marshal9P(Marshal) :
 		self._enc4(len(self.bytes) + 4)
 		self.bytes = self.bytes[-4:] + self.bytes[:-4]
 		if self.verbose :
-			print "send", type, tag, repr(args)
+			print "-->", type, tag, repr(args)
 		self.fd.write(self.getBuf())
 
 	def recv(self) :
@@ -251,7 +251,7 @@ class Marshal9P(Marshal) :
 		rest = _applyFuncs(self.msgDecodes[type])
 		self._checkResid()
 		if self.verbose :
-			print "recv", type, tag, repr(rest)
+			print "<--", type, tag, repr(rest)
 		return type,tag,rest
 
 	def _encQ(self, q) :
@@ -329,260 +329,149 @@ class Marshal9P(Marshal) :
 				self._decS()),)
 		return r
 
+class File(object) :
+    """
+    A File object represents an instance of a file, directory or path.
+    It contains all the per-instance state for the file/dir/path.
+    It is associated with a filesystem object (or occasionally with
+    multiple filesystem objects at union mount points).  All file instances
+    implemented by a filesystem share a single file system object.
+    """
 
-class RpcClient(object) :
-	"""
-	A client interface to the protocol.
-	"""
-	verbose = 0
-	def __init__(self, fd) :
-		self.msg = Marshal9P(fd)
+    def __init__(self, path, dev=None, parent=None) :
+        """If dev is specified this must not be the root of the dev."""
+        self.path = normpath(path)
+        self.basename = os.path.basename(self.path)
+        self.parent = parent
+        self.isdir = 0
+        self.dirlist = []
+        self.odev = None
 
-	def _rpc(self, type, *args) :
-		tag = 1
-		if type == Tversion :
-			tag = notag
-		if self.verbose :
-			print cmdName[type], repr(args)
-		self.msg.send(type, tag, *args)
-		rtype,rtag,vals = self.msg.recv()
-		if self.verbose :
-			print cmdName[rtype], repr(vals)
-		if rtag != tag :
-			raise Error("invalid tag received")
-		if rtype == Rerror :
-			raise RpcError(vals)
-		if rtype != type + 1 :
-			raise Error("incorrect reply from server: %r" % [rtype,rtag,vals])
-		return vals
+        self.devs = []
+        if dev :
+            self.devs.append(dev)
+            dev.estab(self, 0)
+        if self.path in mountTable :
+            for d in mountTable[self.path] :
+                self.devs.append(d)
+                d.estab(self, 1)
+        if not self.devs :
+            raise ServError("no implementation for %s" % self.path)
+        self.dev = self.devs[0]
 
-	def version(self, msize, version) :
-		return self._rpc(Tversion, msize, version)
-	def auth(self, fid, uname, aname) :
-		return self._rpc(Tauth, fid, uname, aname)
-	def attach(self, fid, afid, uname, aname) :
-		return self._rpc(Tattach, fid, afid, uname, aname)
-	def walk(self, fid, newfid, wnames) :
-		return self._rpc(Twalk, (fid, newfid, wnames))
-	def open(self, fid, mode) :
-		return self._rpc(Topen, fid, mode)
-	def create(self, fid, name, perm, mode) :
-		return self._rpc(Tcreate, fid, name, perm, mode)
-	def read(self, fid, off, count) :
-		return self._rpc(Tread, fid, off, count)
-	def write(self, fid, off, data) :
-		return self._rpc(Twrite, fid, off, data)
-	def clunk(self, fid) :
-		return self._rpc(Tclunk, fid)
-	def remove(self, fid) :
-		return self._rpc(Tremove, fid)
-	def stat(self, fid) :
-		return self._rpc(Tstat, fid)
-	def wstat(self, fid, stats) :
-		return self._rpc(Twstat, fid, stats)
+    def _checkOpen(self, want) :
+        if (self.odev is not None) != want :
+            err = ("already open", "not open")[want]
+            raise ServError(err)
 
-class RpcServer(object) :
-	"""
-	A server interface to the protocol.
-	Subclass this to provide service
-	"""
-	verbose = 1
-	def __init__(self, fd) :
-		self.msg = Marshal9P(fd)
+    def dup(self) :
+        """
+        Dup a non-open object.  
+        N.B. No fields referenced prior to opening the file can be altered!
+        """
+        self._checkOpen(0)
+        return copy.copy(self)
 
-	def _err(self, tag, msg) :
-		print 'Error', msg		# XXX
-		if self.verbose :
-			print cmdName[Rerror], repr(msg)
-		self.msg.send(Rerror, tag, msg)
+    def getQid(self) :
+        type = self.dev.type
+        if self.isdir :
+            type |= QDIR
+        return type,0,hash8(self.path)
 
-	def rpc(self) :
-		"""
-		Process a single RPC message.
-		Return -1 on error.
-		"""
-		type,tag,vals = self.msg.recv()
-		if type not in cmdName :
-			return self._err(tag, "Invalid message")
-		name = "_srv" + cmdName[type]
-		if self.verbose :
-			print cmdName[type], repr(vals)
-		if hasattr(self, name) :
-			func = getattr(self, name)
-			try :
-				rvals = func(type, tag, vals)
-			except ServError,e :
-				self._err(tag, e.args[0])
-				return 1					# nonfatal
-			if self.verbose :
-				print cmdName[type+1], repr(rvals)
-			self.msg.send(type + 1, tag, *rvals)
-		else :
-			return self._err(tag, "Unhandled message: %s" % cmdName[type])
-		return 1
+    def walk(self, n) :
+        self._checkOpen(0)
+        path = os.path.join(self.path, n)
+        for d in self.devs :
+            fn = File(path, d, self)
+            if d.walk(self, fn, n) :
+                return fn
 
-	def serve(self) :
-		while self.rpc() :
-			pass
+    def _statd(self, d) :
+        s = list(d.stat(self))
+        q = self.getQid()
+        s[1] = q[0]
+        s[3] = q
+        s[8] = self.basename
+        return s
 
+    def stat(self) :
+        # XXX return all stats or just the first one?
+        return self._statd(self.dev)
 
-class NinepClient(object) :
-	"""
-	A tiny 9p client.
-	"""
-	AFID = 10
-	ROOT = 11
-	CWD = 12
-	F = 13
+    def wstat(self, stbuf) :
+        self._checkOpen(0)
+        self.dev.wstat(self, stbuf)
+        l,t,d,q,mode,at,mt,sz,name,uid,gid,muid = st
+        if name is not nochgS :
+            new = normpath(os.path.join(os.path.basedir(self.path), name))
+            self.path = new
 
-	def __init__(self, fd, user, passwd, authsrv) :
-		self.rpc = ninep.RpcClient(fd)
-		self.login(user, passwd, authsrv)
+    def remove(self) :
+        # XXX checkOpen?
+        if self.path in mountTable :
+            raise ServError("mountpoint busy")
+        self.dev.remove(self)
 
-	def login(self, user, passwd, authsrv) :
-		maxbuf,vers = self.rpc.version(16 * 1024, ninep.version)
-		if vers != ninep.version :
-			raise Error("version mismatch: %r" % vers)
+    def open(self, mode) :
+        self._checkOpen(0)
+        for d in self.devs :
+            d.open(self, mode)
+            self.odev = d
 
-		afid = self.AFID
-		try :
-			self.rpc.auth(afid, user, '')
-			needauth = 1
-		except ninep.RpcError,e :
-			afid = ninep.nofid
+    def create(self, n, perm, mode) :
+        self._checkOpen(0)
+        path = os.path.join(self.path, n)
+        for d in self.devs :
+            fn = File(path, d, self)
+            if d.exists(fn) :
+                raise ServError("already exists")
+        for d in self.devs :
+            fn = File(path, d, self)
+            if d.cancreate :
+                d.create(fn, perm, mode)
+                fn.odev = d
+                return fn
+        raise ServError("creation not allowed")
 
-		if afid != ninep.nofid :
-			if passwd is None :
-				raise Error("Password required")
+    def clunk(self) :
+        if self.odev :
+            self.odev.clunk(self)
+            self.odev = None
 
-			import ninepsk1
-			try :
-				ninepsk1.clientAuth(self.rpc, afid, user, ninepsk1.makeKey(passwd), authsrv, ninepsk1.AUTHPORT)
-			except socket.error,e :
-				raise Error("%s: %s" % (authsrv, e.args[1]))
-		self.rpc.attach(self.ROOT, afid, user, "")
-		if afid != ninep.nofid :
-			self.rpc.clunk(afid)
-		self.rpc.walk(self.ROOT, self.CWD, [])
+    def _readDir(self, off, l) :
+        if off == 0 :
+            self.dirlist = []
+            for d in self.devs :
+                for n in d.list(self) :
+                    # XXX ignore exceptions in stat?
+                    path = os.path.join(self.path, n)
+                    fn = File(path, d, self)
+                    s = fn._statd(d)
+                    self.dirlist.append(s)
+        # otherwise assume we continue where we left off
+        p9 = Marshal9P(None)
+        p9.setBuf()
+        while self.dirlist :
+            # Peeking into our abstractions here.  Proceed cautiously.
+            xl = len(p9.bytes)
+            p9._encStat(self.dirlist[0:1], enclen=0)
+            if len(p9.bytes) > l :            # backup if necessary
+                p9.bytes = p9.bytes[:xl]
+                break
+            self.dirlist[0:1] = []
+        return p9.getBuf()
 
-	def close(self) :
-		self.rpc.clunk(self.ROOT)
-		self.rpc.clunk(self.CWD)
-		self.sock.close()
+    def read(self, off, l) :
+        self._checkOpen(1)
+        if self.isdir :
+            return self._readDir(off, l)
+        else :
+            return self.odev.read(self, off, l)
 
-	def _walk(self, pstr='') :
-		root = self.CWD
-		if pstr == '' :
-			path = []
-		else :
-			path = pstr.split("/")
-			if path[0] == '' :
-				root = self.ROOT
-				path = path[1:]
-			path = filter(None, path)
-		try : 
-			w = self.rpc.walk(root, self.F, path)
-		except ninep.RpcError,e :
-			print "%s: %s" % (pstr, e.args[0])
-			return
-		if len(w) < len(path) :
-			print "%s: not found" % pstr
-			return
-		return w
-	def _open(self, pstr='', mode=0) :
-		if self._walk(pstr) is None :
-			return
-		self.pos = 0L
-		return self.rpc.open(self.F, mode)
-	def _create(self, pstr, perm=0644, mode=1) :
-		p = pstr.split("/")
-		pstr2,name = "/".join(p[:-1]),p[-1]
-		if self._walk(pstr2) is None :
-			return
-		self.pos = 0L
-		try :
-			return self.rpc.create(self.F, name, perm, mode)
-		except ninep.RpcError,e :
-			self._close()
-			raise ninep.RpcError(e.args[0])
-	def _read(self, l) :
-		buf = self.rpc.read(self.F, self.pos, l)
-		self.pos += len(buf)
-		return buf
-	def _write(self, buf) :
-		l = self.rpc.write(self.F, self.pos, buf)
-		self.pos += l
-		return l
-	def _close(self) :
-		self.rpc.clunk(self.F)
+    def write(self, off, buf) :
+        self._checkOpen(1)
+        if self.isdir :
+            raise ServError("can't write directories")
+        return self.odev.write(self, off, buf)
 
-	def stat(self, pstr) :
-		if self._walk(pstr) is None :
-			print "%s: not found" % pstr
-		else :
-			for sz,t,d,q,m,at,mt,l,name,u,g,mod in self.rpc.stat(self.F) :
-				print "%s %s %s %-8d\t\t%s" % (modeStr(m), u, g, l, name)
-			self._close()
-		
-	def ls(self, long=0) :
-		if self._open() is None :
-			return
-		while 1 :
-			buf = self._read(4096)
-			if len(buf) == 0 :
-				break
-			p9 = self.rpc.msg
-			p9.setBuf(buf)
-			for sz,t,d,q,m,at,mt,l,name,u,g,mod in p9._decStat(0) :
-				if long :
-					print "%s %s %s %-8d\t\t%s" % (modeStr(m), u, g, l, name)
-				else :
-					print name,
-		if not long :
-			print
-		self._close()
-	def cd(self, pstr) :
-		q = self._walk(pstr)
-		if q is None :
-			return
-		if q and not (q[-1][0] & ninep.QDIR) :
-			print "%s: not a directory" % pstr
-			self._close()
-			return
-		self.F,self.CWD = self.CWD,self.F
-		self._close()
-
-	def mkdir(self, pstr, perm=0644) :
-		self._create(pstr, perm | ninep.DIR)
-		self._close()
-
-	def cat(self, name, out=None) :
-		if out is None :
-			out = sys.stdout
-		if self._open(name) is None :
-			return
-		while 1 :
-			buf = self._read(4096)
-			if len(buf) == 0 :
-				break
-			out.write(buf)
-		self._close()
-	def put(self, name, inf=None) :
-		if inf is None :
-			inf = sys.stdin
-		x = self._create(name)
-		if x is None :
-			x = self._open(name, ninep.OWRITE|ninep.OTRUNC)
-			if x is None :
-				return
-		sz = 1024
-		while 1 :
-			buf = inf.read(sz)
-			self._write(buf)
-			if len(buf) < sz :
-				break
-		self._close()
-	def rm(self, pstr) :
-		self._open(pstr)
-		self.rpc.remove(self.F)
 

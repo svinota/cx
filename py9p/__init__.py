@@ -6,10 +6,12 @@ __docformat__ = 'plaintext'
 
 __all__ = []
 for subpackage in [
-    'ninep',
-    'sk1',
+    'proto',
+    'server',
+    'client',
+    'authfs',
     ]:
-    try: 
+    try:
         exec 'import ' + subpackage
         __all__.append( subpackage )
     except ImportError:
