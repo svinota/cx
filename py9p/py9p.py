@@ -3,6 +3,11 @@
 9P protocol implementation as documented in plan9 intro(5) and <fcall.h>.
 """
 
+import os.path # normpath for servers
+import socket
+import select
+import copy
+
 cmdName = {}
 def _enumCmd(*args):
     num = 100
@@ -29,6 +34,9 @@ OTRUNC,ORCLOSE = 0x10,0x40
 
 PORT = 564
 
+# maps path names to filesystem objects
+mountTable = {}
+klasses = {}
 
 def pad(str, l, padch='\0'):
     str += padch * (l - len(str))
@@ -44,13 +52,20 @@ def _applyFuncs(funcs, vals=None):
         x = x[0]
     return x
 
+def normpath(p):
+    return os.path.normpath(os.path.abspath(p))
+
+def hash8(obj):
+    return abs(hash(obj))
+
 def XXXdump(buf):
     print " ".join(["%02x" % ord(ch) for ch in buf])
 
 class Error(Exception): pass
 class RpcError(Error): pass
 class ServerError(Error): pass
-class ClientError(Error) : pass
+class ClientError(Error): pass
+
 
 class Sock:
     """Provide appropriate read and write methods for the Marshaller"""
@@ -471,7 +486,7 @@ class File(object):
         while self.dirlist:
             # Peeking into our abstractions here.  Proceed cautiously.
             xl = len(p9.bytes)
-            print "dirlist: ", self.dirlist[0:1]
+            #print "dirlist: ", self.dirlist[0:1]
             p9._encStat(self.dirlist[0:1], enclen=0)
             if len(p9.bytes) > l:            # backup if necessary
                 p9.bytes = p9.bytes[:xl]
@@ -500,29 +515,51 @@ class Server(object):
     """
     BUFSZ = 8320
     verbose = 0
+    selectpool = []
 
-    def __init__(self, listen, user, dom, key, chatty=0):
+    def __init__(self, listen, user=None, dom=None, key=None, chatty=0):
         if user == None:
             self.authfs = None
         else:
             self.authfs = AuthFs(user, dom, key)
 
-        self.root = File('/')
         self.fid = {}
-        self.fd = fd
         
+        self.root = None
         self.msg = Marshal9P(chatty)
         self.user = user
         self.dom = dom
-        self.port = port
+        self.host = listen[0]
+        self.port = listen[1]
         self.authfs = None
         self.chatty = chatty
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind((host, port),)
+        self.sock.bind((self.host, self.port),)
         self.sock.listen(5)
         self.selectpool.append(self.sock)
+
+    def mount(self, obj):
+        """
+        Mount obj at path in the tree.  Path should exist and be a directory.
+        Only one instance of obj of a given type is allowed since otherwise
+        they would compete for the same storage in the File object.
+        """
+        path = obj.mountpoint
+        k = obj.__class__
+        if k in klasses:
+            raise Error("only one %s allowed" % k)
+
+        path = normpath(path)
+        if path not in mountTable:
+            mountTable[path] = []
+
+        mountTable[path].append(obj)
+        klasses[k] = 1
+
+        if self.root == None:
+            self.root = File('/')
 
     def _err(self, fd, tag, msg):
         print 'Error', msg        # XXX
@@ -537,18 +574,18 @@ class Server(object):
         """
         type,tag,vals = self.msg.recv(fd)
         if type not in cmdName:
-            return self._err(tag, "Invalid message")
+            return self._err(fd, tag, "Invalid message")
         name = "_srv" + cmdName[type]
         if hasattr(self, name):
             func = getattr(self, name)
             try:
                 rvals = func(type, tag, vals)
             except ServerError,e:
-                self._err(tag, e.args[0])
+                self._err(fd, tag, e.args[0])
                 return 1                    # nonfatal
             self.msg.send(fd, type + 1, tag, *rvals)
         else:
-            return self._err(tag, "Unhandled message: %s" % cmdName[type])
+            return self._err(fd, tag, "Unhandled message: %s" % cmdName[type])
         return 1
 
 
@@ -681,18 +718,19 @@ class Server(object):
         return None,
 
     def serve(self):
-        while len(self.readpool) > 0:
-            inr, outr, excr = select.select(self.readpool, [], [])
+        while len(self.selectpool) > 0:
+            inr, outr, excr = select.select(self.selectpool, [], [])
             for s in inr:
-                if s == s.sock:
+                if s == self.sock:
                     cl, addr = s.accept()
-                    self.readpool.append(client)
+                    self.selectpool.append(cl)
                 else:
                     try:
-                        self.rpc(s)
+                        self.rpc(Sock(s))
                     except:
                         print "socket closed"
-                        self.readpool.remove(s)
+                        self.selectpool.remove(s)
+                        raise   # XXX: remove
 
         if self.chatty:
             print >>sys.stderr, "no more clients left; main socket closed"
@@ -709,12 +747,13 @@ class Client(object):
     F = 13
 
     verbose = 0
-    def __init__(self, fd, user, passwd, authsrv, chatty=0):
-        self.login(user, passwd, authsrv)
+    msg = None
 
+    def __init__(self, fd, user, passwd, authsrv, chatty=0):
         self.msg = Marshal9P(chatty)
         self.fd = fd
         self.verbose = chatty
+        self.login(user, passwd, authsrv)
 
     def _rpc(self, type, *args):
         tag = 1
@@ -777,9 +816,9 @@ class Client(object):
             if passwd is None:
                 raise ClientError("Password required")
 
-            import py9psk1
+            import py9psk1, socket
             try:
-                py9psk1.clientAuth(self.rpc, afid, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
+                py9psk1.clientAuth(self, afid, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
             except socket.error,e:
                 raise ClientError("%s: %s" % (authsrv, e.args[1]))
         self.attach(self.ROOT, afid, user, "")

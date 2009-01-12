@@ -1,10 +1,10 @@
 # coding=utf-8
 # Copyright © 2008 Andrey Mirtchovski
 
-from py9p import *
-
 __author__ = """Andrey Mirtchovski"""
 __docformat__ = 'plaintext'
+
+from py9p import *
 
 __all__ = []
 for subpackage in [
