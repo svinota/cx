@@ -4,6 +4,7 @@
 """
 
 import os.path # normpath for servers
+import sys
 import socket
 import select
 import copy
@@ -71,6 +72,7 @@ class Sock:
     """Provide appropriate read and write methods for the Marshaller"""
     def __init__(self, sock):
         self.sock = sock
+        self.fid = {}   # fids are per client
     def read(self, l):
         x = self.sock.recv(l)
         while len(x) < l:
@@ -441,7 +443,10 @@ class File(object):
             raise ServerError("mountpoint busy")
         if not self.dev.cancreate:
             raise ServerError("remove not allowed")
-        self.dev.remove(self)
+        if hasattr(self.dev, 'remove'):
+            self.dev.remove(self)
+        else:
+            raise ServerError("dev can not remove")
 
     def open(self, mode):
         self._checkOpen(0)
@@ -523,9 +528,8 @@ class Server(object):
         else:
             self.authfs = AuthFs(user, dom, key)
 
-        self.fid = {}
-        
         self.root = None
+        self.sockpool = {}
         self.msg = Marshal9P(chatty)
         self.user = user
         self.dom = dom
@@ -590,15 +594,15 @@ class Server(object):
 
 
     def _getFid(self, fid):
-        if fid not in self.fid:
+        if fid not in self.activesock.fid:
             raise ServerError("fid %d not in use" % fid)
-        obj = self.fid[fid]
+        obj = self.activesock.fid[fid]
         return obj
 
     def _setFid(self, fid, obj):
-        if fid in self.fid:
+        if fid in self.activesock.fid:
             raise ServerError("fid %d in use" % fid)
-        self.fid[fid] = obj
+        self.activesock.fid[fid] = obj
         return obj
 
     def _walk(self, obj, path):
@@ -671,14 +675,14 @@ class Server(object):
         fid,mode = vals
         obj = self._getFid(fid).dup()
         obj.open(mode)
-        self.fid[fid] = obj
+        self.activesock.fid[fid] = obj
         return obj.getQid(),8192        # XXX
 
     def _srvTcreate(self, type, tag, vals):
         fid,name,perm,mode = vals
         obj = self._getFid(fid)
         obj = obj.create(name, perm, mode)
-        self.fid[fid] = obj
+        self.activesock.fid[fid] = obj
         return obj.getQid(),8192        # XXX
 
     def _srvTread(self, type, tag, vals):
@@ -692,7 +696,7 @@ class Server(object):
     def _srvTclunk(self, type, tag, vals):
         fid = vals
         self._getFid(fid).clunk()
-        del self.fid[fid]
+        del self.activesock.fid[fid]
         return None,
 
     def _srvTremove(self, type, tag, vals):
@@ -724,13 +728,18 @@ class Server(object):
                 if s == self.sock:
                     cl, addr = s.accept()
                     self.selectpool.append(cl)
+                    self.sockpool[cl] = Sock(cl)
+                    if self.chatty:
+                        print >>sys.stderr, "accepted connection from: %s" % str(addr)
                 else:
                     try:
-                        self.rpc(Sock(s))
+                        self.activesock = self.sockpool[s]
+                        self.rpc(self.sockpool[s])
                     except:
-                        print "socket closed"
+                        if self.chatty:
+                            print >>sys.stderr, "socket closed..."
                         self.selectpool.remove(s)
-                        raise   # XXX: remove
+                        del self.sockpool[s]
 
         if self.chatty:
             print >>sys.stderr, "no more clients left; main socket closed"
