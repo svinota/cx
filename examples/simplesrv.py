@@ -65,7 +65,6 @@ class SampleFs(py9p.Server):
         raise py9p.ServError('not opened for writing')
         
 
-
 def usage(argv0):
     print "usage:  %s [-nd] [-p port] [domain]" % argv0
     sys.exit(1)
@@ -99,6 +98,9 @@ def main(prog, *args):
         passwd = None
         key = None
     else:
+        if len(args) < 2:
+            print >>sys.stderr, "not enough arguments for authentication"
+            usage(prog)
         user = args[0]
         dom = args[1]
         passwd = getpass.getpass()
