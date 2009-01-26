@@ -65,9 +65,8 @@ class SampleFs(py9p.Server):
         raise py9p.ServError('not opened for writing')
         
 
-
 def usage(argv0):
-    print "usage:  %s [-nd] [-p port] [domain]" % argv0
+    print "usage:  %s [-nD] [-p port] [-u user] [-d domain]" % argv0
     sys.exit(1)
 
 def main(prog, *args):
@@ -80,7 +79,7 @@ def main(prog, *args):
     dom = None
 
     try:
-        opt,args = getopt.getopt(args, "dnp:l:")
+        opt,args = getopt.getopt(args, "Dnp:l:u:d:")
     except Exception, msg:
         usage(prog)
     for opt,optarg in opt:
@@ -92,6 +91,11 @@ def main(prog, *args):
             listen = optarg
         if opt == '-n':
             noauth = 1
+        if opt == '-u':
+            user = optarg
+        if opt == '-d':
+            dom = optarg
+            
 
     if(noauth):
         user = None
@@ -99,10 +103,11 @@ def main(prog, *args):
         passwd = None
         key = None
     else:
-        user = args[0]
-        dom = args[1]
+        if user == None or dom == None:
+            print >>sys.stderr, "authentication requires user (-u) and domain (-d)"
+            usage(prog)
         passwd = getpass.getpass()
-        key = P9sk1.makeKey(passwd)
+        key = p9sk1.makeKey(passwd)
 
     srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=dbg)
     srv.mount(SampleFs())
