@@ -8,6 +8,11 @@ setup(name='py9p',
     author='Andrey Mirtchovski',
     author_email='aamirtch@ucalgary.ca',
     url='http://grid.ucalgary.ca',
-    packages=['py9p'],
+    packages=[
+        'py9p'
+        ],
+    scripts=[
+        'examples/cl.py'
+        ],
       
-    )
+)
