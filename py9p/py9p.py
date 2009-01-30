@@ -566,7 +566,7 @@ class Server(object):
             self.root = File('/')
 
     def _err(self, fd, tag, msg):
-        print 'Error', msg        # XXX
+        print >>sys.stderr, 'error: ', msg        # XXX
         if self.verbose:
             print cmdName[Rerror], repr(msg)
         self.msg.send(fd, Rerror, tag, msg)
@@ -586,11 +586,20 @@ class Server(object):
                 rvals = func(type, tag, vals)
             except ServerError,e:
                 self._err(fd, tag, e.args[0])
-                return 1                    # nonfatal
+                return -1
+            except Error, e:
+                self._err(fd, tag, e.args[0])
+                return -1
+            except Exception, e:
+                print >>sys.stderr, "unhandled exception: ", e.args[0]
+                self._err(fd, tag, e.args[0])
+                return -1
+
+
             self.msg.send(fd, type + 1, tag, *rvals)
         else:
             return self._err(fd, tag, "Unhandled message: %s" % cmdName[type])
-        return 1
+        return 0
 
 
     def _getFid(self, fid):
@@ -724,6 +733,7 @@ class Server(object):
     def serve(self):
         while len(self.selectpool) > 0:
             inr, outr, excr = select.select(self.selectpool, [], [])
+            #print 'select:', inr, outr, excr
             for s in inr:
                 if s == self.sock:
                     cl, addr = s.accept()
@@ -735,11 +745,14 @@ class Server(object):
                     try:
                         self.activesock = self.sockpool[s]
                         self.rpc(self.sockpool[s])
-                    except:
-                        if self.chatty:
-                            print >>sys.stderr, "socket closed..."
-                        self.selectpool.remove(s)
-                        del self.sockpool[s]
+                    except Exception, e:
+                        if e.args[0] == 'Client EOF':
+                            if self.chatty:
+                                print >>sys.stderr, "socket closed: " + e.args[0]
+                            self.selectpool.remove(s)
+                        else:
+                            raise
+                        
 
         if self.chatty:
             print >>sys.stderr, "no more clients left; main socket closed"

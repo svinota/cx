@@ -288,20 +288,23 @@ class CmdClient(py9p.Client):
                     cmdf[cmd](args)
                 except py9p.Error,e:
                     print "%s: %s" % (cmd, e.args[0])
+                    if e.args[0] == 'Client EOF':
+                        break
             else:
                 sys.stdout.write("%s ?\n" % cmd)
             if self.done:
                 break
 
 def usage(prog):
-    print "usage: %s [-n] [-a authsrv] [-p srvport] [-u user] srv [cmd ...]" % prog
+    print "usage: %s [-dn] [-a authsrv] [-p srvport] [-u user] srv [cmd ...]" % prog
     sys.exit(1)
     
 def main(prog, *args):
     port = py9p.PORT
     authsrv = None
+    chatty = 0
     try:
-        opt,args = getopt.getopt(args, "a:u:np:")
+        opt,args = getopt.getopt(args, "nda:u:p:")
     except:
         usage(prog)
     passwd = ""
@@ -314,6 +317,8 @@ def main(prog, *args):
             authsrv = optarg
 #        if opt == "-d":
 #            import py9p.debug
+        if opt == '-d':
+            chatty = 1
         if opt == '-n':
             passwd = None
         if opt == "-p":
@@ -343,7 +348,7 @@ def main(prog, *args):
     if passwd is not None:
         passwd = getpass.getpass()
     try:
-        cl = CmdClient(py9p.Sock(sock), user, passwd, authsrv)
+        cl = CmdClient(py9p.Sock(sock), user, passwd, authsrv, chatty)
         cl.cmdLoop(cmd)
     except py9p.Error,e:
         print e
