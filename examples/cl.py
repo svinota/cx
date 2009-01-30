@@ -296,7 +296,7 @@ class CmdClient(py9p.Client):
                 break
 
 def usage(prog):
-    print "usage: %s [-dn] [-a authsrv] [-p srvport] [-u user] srv [cmd ...]" % prog
+    print "usage: %s [-dn] [-a authsrv] [user@]srv[:port] [cmd ...]" % prog
     sys.exit(1)
     
 def main(prog, *args):
@@ -329,7 +329,20 @@ def main(prog, *args):
     if len(args) < 1:
         print >>sys.stderr, "error: no server to connect to..."
         usage(prog)
-    srv = args[0]
+
+    srvkey = args[0].split('@', 2)
+    if len(srvkey) == 2:
+        user = srvkey[0]
+        srvkey = srvkey[1]
+
+    srvkey = srvkey.split(':', 2)
+    if len(srvkey) == 2:
+        port = int(srvkey[1])
+        srvkey = srvkey[0]
+
+    srv = srvkey
+    if chatty:
+        print "connecting as %s to %s, port %d" % (user, srv, port)
 
     # 
     if passwd != None and authsrv is None:
