@@ -73,6 +73,7 @@ class Sock:
     def __init__(self, sock):
         self.sock = sock
         self.fid = {}   # fids are per client
+        self.uname = None
     def read(self, l):
         x = self.sock.recv(l)
         while len(x) < l:
@@ -526,7 +527,8 @@ class Server(object):
         if user == None:
             self.authfs = None
         else:
-            self.authfs = AuthFs(user, dom, key)
+            import py9psk1
+            self.authfs = py9psk1.AuthFs(user, dom, key)
 
         self.root = None
         self.sockpool = {}
@@ -535,7 +537,6 @@ class Server(object):
         self.dom = dom
         self.host = listen[0]
         self.port = listen[1]
-        self.authfs = None
         self.chatty = chatty
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -659,13 +660,20 @@ class Server(object):
                 raise ServerError("user 'none' not permitted to attach")
         else: 
             if self.authfs == None:
-                raise ServerError("only user 'none' allowed on non-auth servers")
-            try:
-                a = self._getFid(afid)
-            except ServerError, e:
-                raise ServerError("auth fid missing: authentication not complete")
-            if a.suid != uname:
-                raise ServerError("not authenticated as %r" % uname)
+                #raise ServerError("only user 'none' allowed on non-auth servers")
+                print >>sys.stderr, "WARNING: no auth system, temporarily allowing to attach (change to 'none' for deployment)"
+            else:
+                try:
+                    a = self._getFid(afid)
+                except ServerError, e:
+                    raise ServerError("auth fid missing: authentication not complete")
+                if a.suid != uname:
+                    raise ServerError("not authenticated as %r" % uname)
+    
+        if self.chatty:
+            print >>sys.stderr, "remote attached as %r" % uname
+
+        self.activesock.uname = uname
         r = self._setFid(fid, self.root.dup())
         return (r.getQid(),)
 
