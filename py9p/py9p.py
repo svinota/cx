@@ -799,46 +799,46 @@ class Client(object):
             raise ClientError("incorrect reply from server: %r" % [rtype,rtag,vals])
         return vals
 
-    def version(self, msize, version):
+    # protocol calls; part of 9p
+    # should be private functions, really
+    def _version(self, msize, version):
         return self._rpc(Tversion, msize, version)
-    def auth(self, fid, uname, aname):
+    def _auth(self, fid, uname, aname):
         return self._rpc(Tauth, fid, uname, aname)
-    def attach(self, fid, afid, uname, aname):
+    def _attach(self, fid, afid, uname, aname):
         return self._rpc(Tattach, fid, afid, uname, aname)
-    def walk(self, fid, newfid, wnames):
+    def _walk(self, fid, newfid, wnames):
         return self._rpc(Twalk, (fid, newfid, wnames))
-    def open(self, fid, mode):
+    def _open(self, fid, mode):
         return self._rpc(Topen, fid, mode)
-    def create(self, fid, name, perm, mode):
+    def _create(self, fid, name, perm, mode):
         return self._rpc(Tcreate, fid, name, perm, mode)
-    def read(self, fid, off, count):
+    def _read(self, fid, off, count):
         return self._rpc(Tread, fid, off, count)
-    def write(self, fid, off, data):
+    def _write(self, fid, off, data):
         return self._rpc(Twrite, fid, off, data)
-    def clunk(self, fid):
+    def _clunk(self, fid):
         return self._rpc(Tclunk, fid)
-    def remove(self, fid):
+    def _remove(self, fid):
         return self._rpc(Tremove, fid)
-    def stat(self, fid):
+    def _stat(self, fid):
         return self._rpc(Tstat, fid)
-    def wstat(self, fid, stats):
+    def _wstat(self, fid, stats):
         return self._rpc(Twstat, fid, stats)
 
-    def close(self):
-        self.clunk(self.ROOT)
-        self.clunk(self.CWD)
+    def _fullclose(self):
+        self._clunk(self.ROOT)
+        self._clunk(self.CWD)
         self.fd.close()
 
-
     def login(self, user, passwd, authsrv):
-        maxbuf,vers = self.version(16 * 1024, version)
+        maxbuf,vers = self._version(16 * 1024, version)
         if vers != version:
             raise ClientError("version mismatch: %r" % vers)
 
         afid = self.AFID
         try:
-            self.auth(afid, user, '')
-            needauth = 1
+            self._auth(afid, user, '')
         except RpcError,e:
             afid = nofid
 
@@ -851,9 +851,125 @@ class Client(object):
                 py9psk1.clientAuth(self, afid, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
             except socket.error,e:
                 raise ClientError("%s: %s" % (authsrv, e.args[1]))
-        self.attach(self.ROOT, afid, user, "")
+        self._attach(self.ROOT, afid, user, "")
         if afid != nofid:
-            self.clunk(afid)
-        self.walk(self.ROOT, self.CWD, [])
+            self._clunk(afid)
+        self._walk(self.ROOT, self.CWD, [])
+
+    def modeStr(self, mode):
+        bits = ["---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"]
+        def b(s):
+            return bits[(mode>>s) & 7]
+        d = "-"
+        if mode & DIR:
+            d = "d"
+        return "%s%s%s%s" % (d, b(6), b(3), b(0))
+
+
+    # user accessible calls, the actual implementation of a client
+    def close(self):
+        self._clunk(self.F)
+
+    def walk(self, pstr=''):
+        root = self.CWD
+        if pstr == '':
+            path = []
+        else:
+            path = pstr.split("/")
+            if path[0] == '':
+                root = self.ROOT
+                path = path[1:]
+            path = filter(None, path)
+        try: 
+            w = self._walk(root, self.F, path)
+        except RpcError,e:
+            print "%s: %s" % (pstr, e.args[0])
+            return
+        if len(w) < len(path):
+            print "%s: not found" % pstr
+            return
+        return w
+
+    def open(self, pstr='', mode=0):
+        if self.walk(pstr) is None:
+            return
+        self.pos = 0L
+        try:
+            w = self._open(self.F, mode)
+        except RpcError, e:
+            self.close()
+            raise
+        return w
+
+    def create(self, pstr, perm=0644, mode=1):
+        p = pstr.split("/")
+        pstr2,name = "/".join(p[:-1]),p[-1]
+        if self.walk(pstr2) is None:
+            return
+        self.pos = 0L
+        try:
+            return self._create(self.F, name, perm, mode)
+        except RpcError,e:
+            self.close()
+            raise RpcError(e.args[0])
+
+    def rm(self, pstr):
+        self.open(pstr)
+        self._remove(self.F)
+        self.close()
+
+    def read(self, l):
+        buf = self._read(self.F, self.pos, l)
+        self.pos += len(buf)
+        return buf
+
+    def write(self, buf):
+        try:
+            l = self._write(self.F, self.pos, buf)
+            self.pos += l
+            return l
+        except RpcError, e:
+            self.close()
+            raise
+
+    # XXX: need a better stat. return 'File' perhaps?
+    def stat(self, pstr):
+        if self.walk(pstr) is None:
+            print "%s: not found" % pstr
+        else:
+            for sz,t,d,q,m,at,mt,l,name,u,g,mod in self._stat(self.F):
+                print "%s %s %s %-8d\t\t%s" % (self.modeStr(m), u, g, l, name)
+            self.close()
+        
+    def ls(self, long=0):
+        if self.open() is None:
+            return
+        try:
+            while 1:
+                buf = self.read(8192)
+                if len(buf) == 0:
+                    break
+                p9 = self.msg
+                p9.setBuf(buf)
+                for sz,t,d,q,m,at,mt,l,name,u,g,mod in p9._decStat(0):
+                    if long:
+                        print "%s %s %s %-8d\t\t%s" % (self.modeStr(m), u, g, l, name)
+                    else:
+                        print name,
+            if not long:
+                print
+        finally:
+            self.close()
+
+    def cd(self, pstr):
+        q = self.walk(pstr)
+        if q is None:
+            return
+        if q and not (q[-1][0] & QDIR):
+            print "%s: not a directory" % pstr
+            self.close()
+            return
+        self.F, self.CWD = self.CWD, self.F
+        self.close()
 
 

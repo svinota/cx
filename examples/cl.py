@@ -27,146 +27,37 @@ def _os(func, *args):
         raise Error(e.args[1])
     
 class CmdClient(py9p.Client):
-    def _walk(self, pstr=''):
-        root = self.CWD
-        if pstr == '':
-            path = []
-        else:
-            path = pstr.split("/")
-            if path[0] == '':
-                root = self.ROOT
-                path = path[1:]
-            path = filter(None, path)
-        try: 
-            w = self.walk(root, self.F, path)
-        except py9p.RpcError,e:
-            print "%s: %s" % (pstr, e.args[0])
-            return
-        if len(w) < len(path):
-            print "%s: not found" % pstr
-            return
-        return w
-    def _open(self, pstr='', mode=0):
-        if self._walk(pstr) is None:
-            return
-        self.pos = 0L
-        try:
-            w = self.open(self.F, mode)
-        except py9p.RpcError, e:
-            self.clunk(self.F)
-            raise
-        return w
-    def _create(self, pstr, perm=0644, mode=1):
-        p = pstr.split("/")
-        pstr2,name = "/".join(p[:-1]),p[-1]
-        if self._walk(pstr2) is None:
-            return
-        self.pos = 0L
-        try:
-            return self.create(self.F, name, perm, mode)
-        except py9p.RpcError,e:
-            self._close()
-            raise py9p.RpcError(e.args[0])
-    def _read(self, l):
-        buf = self.read(self.F, self.pos, l)
-        self.pos += len(buf)
-        return buf
-    def _write(self, buf):
-        try:
-            l = self.write(self.F, self.pos, buf)
-            self.pos += l
-            return l
-        except py9p.RpcError, e:
-            self.clunk(self.F)
-            raise
-    def _close(self):
-        self.clunk(self.F)
-
-    def stat(self, pstr):
-        if self._walk(pstr) is None:
-            print "%s: not found" % pstr
-        else:
-            for sz,t,d,q,m,at,mt,l,name,u,g,mod in self.stat(self.F):
-                print "%s %s %s %-8d\t\t%s" % (self.modeStr(m), u, g, l, name)
-            self._close()
-        
-    def ls(self, long=0):
-        if self._open() is None:
-            return
-        try:
-            while 1:
-                buf = self._read(8192)
-                if len(buf) == 0:
-                    break
-                p9 = self.msg
-                p9.setBuf(buf)
-                for sz,t,d,q,m,at,mt,l,name,u,g,mod in p9._decStat(0):
-                    if long:
-                        print "%s %s %s %-8d\t\t%s" % (self.modeStr(m), u, g, l, name)
-                    else:
-                        print name,
-            if not long:
-                print
-        finally:
-            self._close()
-    def cd(self, pstr):
-        q = self._walk(pstr)
-        if q is None:
-            return
-        if q and not (q[-1][0] & py9p.QDIR):
-            print "%s: not a directory" % pstr
-            self._close()
-            return
-        self.F,self.CWD = self.CWD,self.F
-        self._close()
-
-    def create(self, name, perm=0644):
-        self._create(name, perm)
-        self._close()
-
     def mkdir(self, pstr, perm=0644):
-        self._create(pstr, perm | py9p.DIR)
-        self._close()
+        self.create(pstr, perm | py9p.DIR)
+        self.close()
 
     def cat(self, name, out=None):
         if out is None:
             out = sys.stdout
-        if self._open(name) is None:
+        if self.open(name) is None:
             return
         while 1:
-            buf = self._read(8192*2)
+            buf = self.read(8192*2)
             if len(buf) == 0:
                 break
             out.write(buf)
-        self._close()
+        self.close()
 
     def put(self, name, inf=None):
         if inf is None:
             inf = sys.stdin
-        x = self._create(name)
+        x = self.create(name)
         if x is None:
-            x = self._open(name, py9p.OWRITE|py9p.OTRUNC)
+            x = self.open(name, py9p.OWRITE|py9p.OTRUNC)
             if x is None:
                 return
         sz = 1024
         while 1:
             buf = inf.read(sz)
-            self._write(buf)
+            self.write(buf)
             if len(buf) < sz:
                 break
-        self._close()
-    def rm(self, pstr):
-        self._open(pstr)
-        self.remove(self.F)
-
-    def modeStr(self, mode):
-        bits = ["---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"]
-        def b(s):
-            return bits[(mode>>s) & 7]
-        d = "-"
-        if mode & py9p.DIR:
-            d = "d"
-        return "%s%s%s%s" % (d, b(6), b(3), b(0))
+        self.close()
 
     def _cmdwrite(self, args):
         if len(args) < 1:
@@ -177,12 +68,12 @@ class CmdClient(py9p.Client):
             buf = ' '.join(args[1:])
 
         name = args[0]
-        x = self._open(name, py9p.OWRITE|py9p.OTRUNC)
+        x = self.open(name, py9p.OWRITE|py9p.OTRUNC)
         if x is None:
             return
         if buf != None:
-            self._write(buf)
-        self._close()
+            self.write(buf)
+        self.close()
 
     def _cmdstat(self, args):
         for a in args:
