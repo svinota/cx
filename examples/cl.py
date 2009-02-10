@@ -4,19 +4,13 @@ import sys
 import os
 import getopt
 import getpass
+import code
+import readline
+import atexit
 
 import py9p
 
 class Error(py9p.Error): pass
-
-def modeStr(mode):
-    bits = ["---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"]
-    def b(s):
-        return bits[(mode>>s) & 7]
-    d = "-"
-    if mode & py9p.DIR:
-        d = "d"
-    return "%s%s%s%s" % (d, b(6), b(3), b(0))
 
 def _os(func, *args):
     try:
@@ -25,6 +19,25 @@ def _os(func, *args):
         raise Error(e.args[1])
     except IOError,e:
         raise Error(e.args[1])
+
+class HistoryConsole(code.InteractiveConsole):
+    def __init__(self, locals=None, filename="<console>",
+                 histfile=os.path.expanduser("~/.py9phist")):
+        code.InteractiveConsole.__init__(self)
+        self.init_history(histfile)
+
+    def init_history(self, histfile):
+        readline.parse_and_bind("tab: complete")
+        if hasattr(readline, "read_history_file"):
+            try:
+                readline.read_history_file(histfile)
+            except IOError:
+                pass
+            atexit.register(self.save_history, histfile)
+
+    def save_history(self, histfile):
+        readline.write_history_file(histfile)
+
     
 class CmdClient(py9p.Client):
     def mkdir(self, pstr, perm=0644):
@@ -147,16 +160,18 @@ class CmdClient(py9p.Client):
 
     def _nextline(self):        # generator is cleaner but not supported in 2.2
         if self.cmds is None:
-            sys.stdout.write("9p> ")
-            sys.stdout.flush()
-            line = sys.stdin.readline()
+            #sys.stdout.write("9p> ")
+            #sys.stdout.flush()
+            #line = sys.stdin.readline()
+            line = self.cons.raw_input("9p> ")
             if line != "":
-                return line[:-1]
+                return line
         else:
             if self.cmds:
                 x,self.cmds = self.cmds[0],self.cmds[1:]
                 return x
     def cmdLoop(self, cmds):
+        self.cons = HistoryConsole()
         cmdf = {}
         for n in dir(self):
             if n[:4] == "_cmd":
@@ -262,4 +277,6 @@ if __name__ == "__main__":
         main(*sys.argv)
     except KeyboardInterrupt:
         print "interrupted."
+    except EOFError:
+        print "done."
 
