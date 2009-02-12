@@ -100,12 +100,23 @@ class CmdClient(py9p.Client):
                 print "usage: ls [-l]"
                 return
             args[0:1] = []
-        self.ls(long)
+        if long:
+            print '\n'.join(self.ls(long))
+        else:
+            print ' '.join(self.ls(long))
+
     def _cmdcd(self, args):
         if len(args) != 1:
             print "usage: cd path"
             return
         self.cd(args[0])
+
+    def _cmdio(self, args):
+        if len(args) != 1:
+            print "usage: io path"
+            return
+        self.io(args[0])
+
     def _cmdcat(self, args):
         if len(args) != 1:
             print "usage: cat path"
@@ -170,6 +181,36 @@ class CmdClient(py9p.Client):
             if self.cmds:
                 x,self.cmds = self.cmds[0],self.cmds[1:]
                 return x
+
+    def completer(self, text, state):
+        ret = None
+        cmds = [x[4:] for x in dir(self) if x[:4] == "_cmd"]
+        cmds.sort()
+
+        line = readline.get_line_buffer()
+        level = line.split()
+        if (len(level) == 0) or (len(level) == 1 and line[-1] != ' '):
+            # match commands
+            if text == '' and state < len(cmds):
+                ret = cmds[state]
+            else:
+                l = filter(lambda x: x.startswith(text), cmds)
+                if len(l) > state:
+                    ret = l[state]+' '
+        elif len(level) == 2 or line[-1] == ' ':
+            # match files
+            if state == 0:
+                self.lsfiles = self.ls()
+                self.lsfiles.sort()
+            ls = self.lsfiles
+            if text == '' and state < len(cmds):
+                ret = ls[state]
+            else:
+                l = filter(lambda x: x.startswith(text), ls)
+                if len(l) > state:
+                    ret = l[state]+' '
+        return ret
+
     def cmdLoop(self, cmds):
         self.cons = HistoryConsole()
         cmdf = {}
@@ -184,7 +225,7 @@ class CmdClient(py9p.Client):
         while 1:
             line = self._nextline()
             if line is None:
-                break
+                continue
             args = filter(None, line.split(" "))
             if not args:
                 continue
@@ -268,6 +309,7 @@ def main(prog, *args):
         passwd = getpass.getpass()
     try:
         cl = CmdClient(py9p.Sock(sock), user, passwd, authsrv, chatty)
+        readline.set_completer(cl.completer)
         cl.cmdLoop(cmd)
     except py9p.Error,e:
         print e
@@ -279,4 +321,6 @@ if __name__ == "__main__":
         print "interrupted."
     except EOFError:
         print "done."
+    except Exception, m:
+        print "unknown exception: " + m.msg
 

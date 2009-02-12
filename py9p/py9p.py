@@ -753,6 +753,10 @@ class Server(object):
                     try:
                         self.activesock = self.sockpool[s]
                         self.rpc(self.sockpool[s])
+                    except socket.error, e:
+                        if self.chatty:
+                            print >>sys.stderr, "socket error: " + e.args[1]
+                        self.selectpool.remove(s)
                     except Exception, e:
                         if e.args[0] == 'Client EOF':
                             if self.chatty:
@@ -911,7 +915,7 @@ class Client(object):
             return self._create(self.F, name, perm, mode)
         except RpcError,e:
             self.close()
-            raise RpcError(e.args[0])
+            raise
 
     def rm(self, pstr):
         self.open(pstr)
@@ -919,7 +923,12 @@ class Client(object):
         self.close()
 
     def read(self, l):
-        buf = self._read(self.F, self.pos, l)
+        try:
+            buf = self._read(self.F, self.pos, l)
+        except RpcError, e:
+            self.close()
+            raise
+
         self.pos += len(buf)
         return buf
 
@@ -942,6 +951,7 @@ class Client(object):
             self.close()
         
     def ls(self, long=0):
+        ret = []
         if self.open() is None:
             return
         try:
@@ -953,13 +963,13 @@ class Client(object):
                 p9.setBuf(buf)
                 for sz,t,d,q,m,at,mt,l,name,u,g,mod in p9._decStat(0):
                     if long:
-                        print "%s %s %s %-8d\t\t%s" % (self.modeStr(m), u, g, l, name)
+                        ret.append("%s %s %s %-8d\t\t%s" % (self.modeStr(m), u, g, l, name))
                     else:
-                        print name,
-            if not long:
-                print
+                        ret.append(name)
         finally:
             self.close()
+
+        return ret
 
     def cd(self, pstr):
         q = self.walk(pstr)
