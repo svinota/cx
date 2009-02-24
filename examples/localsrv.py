@@ -1,51 +1,50 @@
+#!/usr/bin/python 
+
 import sys
 import socket
+import stat
 import os.path
 import copy
-import stat
+import time
 
-import P9
-import srv
+import py9p
+import py9p.py9psk1 as py9psk1
 
-ServError = srv.ServError
+def _os(func, *args):
+    try:
+        return func(*args)
+    except OSError,e:
+        raise py9p.ServerError(e.args[1])
+    except IOError,e:
+        raise py9p.ServerError(e.args[1])
+
+def _nf(func, *args):
+    try:
+        return func(*args)
+    except py9p.ServerError,e:
+        return
 
 def uidname(u) :            # XXX
     return "%d" % u
 gidname = uidname            # XXX
-
-
-def normpath(p) :
-    return os.path.normpath(os.path.abspath(p))
-
-def _os(func, *args) :
-    try :
-        return func(*args)
-    except OSError,e :
-        raise ServError(e.args[1])
-    except IOError,e :
-        raise ServError(e.args[1])
-
-def _nf(func, *args) :
-    try :
-        return func(*args)
-    except ServError,e :
-        return
-
 
 class LocalFs(object) :
     """
     A local filesystem device.
     """
     type = ord('f')
-    def __init__(self, root, cancreate=1) :
-        self.root = normpath(root) 
+    mountpoint = py9p.normpath('/tmp')
+
+    def __init__(self, root=None, cancreate=1) :
+        if root:
+            self.root = py9p.normpath(root) 
         self.cancreate = cancreate 
 
     def estab(self, f, isroot) :
         if isroot :
             f.localpath = self.root
         else :
-            f.localpath = normpath(os.path.join(f.parent.localpath, f.basename))
+            f.localpath = py9p.normpath(os.path.join(f.parent.localpath, f.basename))
         f.isdir = os.path.isdir(f.localpath)
         f.fd = None
 
@@ -64,7 +63,7 @@ class LocalFs(object) :
         u = uidname(s.st_uid)
         res = s.st_mode & 0777
         if stat.S_ISDIR(s.st_mode):
-            res = res | P9.DIR
+            res = res | py9p.DIR
             
         return (0, 0, s.st_dev, None, res, 
                 int(s.st_atime), int(s.st_mtime),
@@ -87,8 +86,8 @@ class LocalFs(object) :
 
     def create(self, f, perm, mode) :
         # nowhere close to atomic. *sigh*
-        if perm & P9.DIR :
-            _os(os.mkdir, f.localpath, perm & ~P9.DIR)
+        if perm & py9p.DIR :
+            _os(os.mkdir, f.localpath, perm & ~py9p.DIR)
             f.isdir = 1
         else :
             _os(file, f.localpath, "w+").close()
@@ -101,17 +100,17 @@ class LocalFs(object) :
 
     def open(self, f, mode) :
         if not f.isdir :
-            if (mode & 3) == P9.OWRITE :
-                if mode & P9.OTRUNC :
+            if (mode & 3) == py9p.OWRITE :
+                if mode & py9p.OTRUNC :
                     m = "wb"
                 else :
                     m = "r+b"        # almost
-            elif (mode & 3) == P9.ORDWR :
+            elif (mode & 3) == py9p.ORDWR :
                 if m & OTRUNC :
                     m = "w+b"
                 else :
                     m = "r+b"
-            else :                # P9.OREAD and otherwise
+            else :                # py9p.OREAD and otherwise
                 m = "rb"
             f.fd = _os(file, f.localpath, m)
 
@@ -133,6 +132,87 @@ class LocalFs(object) :
         f.fd.write(buf)
         return len(buf)
 
-root = LocalFs('/tmp')
-mountpoint = '/'
+def usage(prog):
+    print "usage:  %s [-d] [-n] [-m module] [-p port] [-r root] [-l listen] srvuser domain" % prog
+    sys.exit(1)
 
+def main():
+    import getopt
+    import getpass
+
+    prog = sys.argv[0]
+    args = sys.argv[1:]
+
+    port = py9p.PORT
+    listen = '0.0.0.0'
+    root = None
+    mods = []
+    noauth = 0
+    chatty = 0
+
+    try:
+        opt,args = getopt.getopt(args, "dncm:p:r:l:")
+    except:
+        usage(prog)
+    for opt,optarg in opt:
+        if opt == "-d":
+            chatty = 1
+        if opt == '-m':
+            mods.append(optarg)
+        if opt == '-c':
+            chatty = chatty + 1
+        if opt == '-r':
+            root = optarg
+        if opt == "-n":
+            noauth = 1
+        if opt == "-p":
+            port = int(optarg)
+        if opt == '-l':
+            listen = optarg
+
+    if(noauth):
+        user = None
+        dom = None
+        passwd = None
+        key = None
+    elif len(args) != 2:
+        usage(prog)
+    else:
+        user = args[0]
+        dom = args[1]
+        passwd = getpass.getpass()
+        key = py9psk1.makeKey(passwd)
+
+    srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=chatty)
+    srv.mount(LocalFs(root))
+
+    for m in mods:
+        x = __import__(m)
+        mount(x.mountpoint, x.root)
+        print '%s loaded.' % m
+
+    srv.serve()
+
+#'''
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print "interrupted."
+'''
+if __name__ == "__main__":
+    import trace
+
+    # create a Trace object, telling it what to ignore, and whether to
+    # do tracing or line-counting or both.
+    tracer = trace.Trace(
+        ignoredirs=[sys.prefix, sys.exec_prefix],
+        trace=1,
+        count=1)
+
+    # run the new command using the given tracer
+    tracer.run('main()')
+    # make a report, placing output in /tmp
+    r = tracer.results()
+    r.write_results(show_missing=True, coverdir="/tmp")
+#'''
