@@ -322,5 +322,6 @@ if __name__ == "__main__":
     except EOFError:
         print "done."
     except Exception, m:
-        print "unknown exception: " + m.msg
+        print "unknown exception: " + m.args[0]
+        raise
 
