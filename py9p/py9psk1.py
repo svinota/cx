@@ -227,11 +227,11 @@ def clientAuth(cl, afid, user, Kc, authsrv, authport=567):
 	gen = 0
 
 	def rd(l):
-		x = cl.read(afid, pos[0], l)
+		x = cl._read(afid, pos[0], l)
 		pos[0] += len(x)
 		return x
 	def wr(x):
-		l = cl.write(afid, pos[0], x)
+		l = cl._write(afid, pos[0], x)
 		pos[0] += l
 		return l
 

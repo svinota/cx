@@ -12,7 +12,8 @@ setup(name='py9p',
         'py9p'
         ],
     scripts=[
-        'examples/cl.py'
+        'examples/cl.py',
+        'examples/localsrv.py'
         ],
       
 )

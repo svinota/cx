@@ -33,11 +33,10 @@ class LocalFs(object) :
     A local filesystem device.
     """
     type = ord('f')
-    mountpoint = py9p.normpath('/tmp')
+    mountpoint = py9p.normpath('/')
 
-    def __init__(self, root=None, cancreate=1) :
-        if root:
-            self.root = py9p.normpath(root) 
+    def __init__(self, root, cancreate=1) :
+        self.root = py9p.normpath(root) 
         self.cancreate = cancreate 
 
     def estab(self, f, isroot) :
@@ -145,7 +144,7 @@ def main():
 
     port = py9p.PORT
     listen = '0.0.0.0'
-    root = None
+    root = '/tmp'
     mods = []
     noauth = 0
     chatty = 0
@@ -188,7 +187,7 @@ def main():
 
     for m in mods:
         x = __import__(m)
-        mount(x.mountpoint, x.root)
+        mount(x)
         print '%s loaded.' % m
 
     srv.serve()
