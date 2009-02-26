@@ -40,7 +40,7 @@ class HistoryConsole(code.InteractiveConsole):
 
     
 class CmdClient(py9p.Client):
-    def mkdir(self, pstr, perm=0644):
+    def mkdir(self, pstr, perm=0755):
         self.create(pstr, perm | py9p.DIR)
         self.close()
 

@@ -74,7 +74,7 @@ def main(prog, *args):
     listen = 'localhost'
     mods = []
     noauth = 0
-    dbg = 0
+    dbg = False
     user = None
     dom = None
 
@@ -83,8 +83,8 @@ def main(prog, *args):
     except Exception, msg:
         usage(prog)
     for opt,optarg in opt:
-        if opt == "-d":
-            dbg = 1
+        if opt == "-D":
+            dbg = True
         if opt == "-p":
             port = int(optarg)
         if opt == '-l':

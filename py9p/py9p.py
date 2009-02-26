@@ -238,7 +238,7 @@ class Marshal9P(Marshal):
 
     verbose = 0
 
-    def __init__(self, chatty=0):
+    def __init__(self, chatty=False):
         self._prep(self.msgFmt)
         self.verbose=chatty
 
@@ -523,7 +523,7 @@ class Server(object):
     verbose = 0
     selectpool = []
 
-    def __init__(self, listen, user=None, dom=None, key=None, chatty=0):
+    def __init__(self, listen, user=None, dom=None, key=None, chatty=False):
         if user == None:
             self.authfs = None
         else:
@@ -783,7 +783,7 @@ class Client(object):
     verbose = 0
     msg = None
 
-    def __init__(self, fd, user, passwd, authsrv, chatty=0):
+    def __init__(self, fd, user, passwd, authsrv, chatty=False):
         self.msg = Marshal9P(chatty)
         self.fd = fd
         self.verbose = chatty
