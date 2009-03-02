@@ -218,10 +218,12 @@ class CmdClient(py9p.Client):
             if n[:4] == "_cmd":
                 cmdf[n[4:]] = getattr(self, n)
 
+        self.done = 0
         if not cmds:
             cmds = None
+        else:
+            self.done = 1 # exit after running the commands
         self.cmds = cmds
-        self.done = 0
         while 1:
             line = self._nextline()
             if line is None:
@@ -239,7 +241,7 @@ class CmdClient(py9p.Client):
                         break
             else:
                 sys.stdout.write("%s ?\n" % cmd)
-            if self.done:
+            if self.done and not self.cmds:
                 break
 
 def usage(prog):
@@ -262,8 +264,6 @@ def main(prog, *args):
     for opt,optarg in opt:
         if opt == '-a':
             authsrv = optarg
-#        if opt == "-d":
-#            import py9p.debug
         if opt == '-d':
             chatty = 1
         if opt == '-n':
@@ -296,7 +296,7 @@ def main(prog, *args):
         print >>sys.stderr, "assuming %s is also auth server" % srv
         authsrv = srv
 
-    cmd = args[2:]
+    cmd = args[1:]
 
     sock = socket.socket(socket.AF_INET)
     try:

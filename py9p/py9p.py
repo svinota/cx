@@ -764,10 +764,8 @@ class Server(object):
                             self.selectpool.remove(s)
                         else:
                             raise
-                        
-
         if self.chatty:
-            print >>sys.stderr, "no more clients left; main socket closed"
+            print >>sys.stderr, "main socket closed"
         return
 
 
