@@ -3,7 +3,7 @@
 9P protocol implementation as documented in plan9 intro(5) and <fcall.h>.
 """
 
-import os.path # normpath for servers
+import os.path 
 import sys
 import socket
 import select
@@ -42,7 +42,7 @@ Enowstat = "wstat prohibited"
 Eperm = "permission denied"
 Eunknownfid = "unknown fid"
 Ebaddir = "bad directory in wstat"
-Ewalknodir = "walk in non-directory"
+Ewalknotdir = "walk in non-directory"
 
 NOTAG = 0xffff
 NOFID = 0xffffffffL
@@ -111,7 +111,9 @@ class Sock:
         return self.sock.fileno()
     def delfid(self, fid):
         if fid in self.fids:
-            del self.fids[fid]
+            self.fids[fid].ref = self.fids[fid].ref - 1
+            if self.fids[fid].ref == 0:
+                del self.fids[fid]
     def getfid(self, fid):
         if fid in self.fids:
             return self.fids[fid]
@@ -168,6 +170,7 @@ class Qid:
 class Fid:
     def __init__(self, pool, fid, path=''):
         self.fid = fid
+        self.ref = 1
         self.omode=-1
         if pool.has_key(fid):
             return None
@@ -507,7 +510,7 @@ class Marshal9P(Marshal):
             self.enc4(fcall.fid)
             self.encS(fcall.name)
             self.enc4(fcall.perm)
-            self.enc1(fcall.perm)
+            self.enc1(fcall.mode)
             if self.dotu:
                 self.encS(fcall.extension)
         elif fcall.type == Tread:
@@ -600,7 +603,7 @@ class Marshal9P(Marshal):
             fcall.fid = self.dec4()
             fcall.name = self.decS()
             fcall.perm = self.dec4()
-            fcall.perm = self.dec1()
+            fcall.mode = self.dec1()
             if self.dotu:
                 fcall.extension = self.decS()
         elif fcall.type == Tread:
@@ -660,6 +663,8 @@ class Server(object):
         self.sock.bind((self.host, self.port),)
         self.sock.listen(5)
         self.readpool.append(self.sock)
+        if self.chatty:
+            print >>sys.stderr, "listening to %s:%d"%(self.host, self.port)
     def mount(self, fs):
         # XXX: for now only allow one mount
         # in the future accept fs/root and
@@ -689,7 +694,9 @@ class Server(object):
                             if self.chatty:
                                 print >>sys.stderr, "socket closed: " + e.args[0]
                             self.readpool.remove(s)
+                            s.close()
                             del self.activesocks[s]
+                            del s
                         else:
                             raise
         if self.chatty:
@@ -714,7 +721,6 @@ class Server(object):
             req.ofcall.type = Rerror
             req.ofcall.ename = error
         try:
-            print "FIDS:", req.sock.fids
             self.marshal.send(req.sock, req.ofcall)
         except socket.error, e:
             if self.chatty:
@@ -741,7 +747,6 @@ class Server(object):
         req.fd = fd.fileno()
         req.sock = fd
 
-        print 'FROMNETFIDS:', req.sock.fids
         if req.ifcall.type not in cmdName:
             self.respond(req, "invalid message")
 
@@ -813,6 +818,7 @@ class Server(object):
             self.fs.attach()
         else:
             req.ofcall.afid = self.fs.root.dir.qid
+            req.fid.qid = self.fs.root.dir.qid
             self.respond(req, None)
         return
 
@@ -863,9 +869,12 @@ class Server(object):
             req.fid.ref = req.fid.ref+1
             req.newfid = req.fid
 
-        if len(req.ifcall.wname) == 0 and self.fs.root:
-            req.ofcall.wqid.append(self.fs.root.dir.qid)
-            req.newfid.qid = self.fs.root.dir.qid
+#        if len(req.ifcall.wname) == 0 and self.fs.root:
+#            req.ofcall.wqid.append(self.fs.root.dir.qid)
+#            req.newfid.qid = self.fs.root.dir.qid
+#            self.respond(req, None)
+        if len(req.ifcall.wname) == 0:
+            req.ofcall.wqid.append(req.fid.qid)
             self.respond(req, None)
         elif hasattr(self.fs, 'walk'):
             self.fs.walk(self, req)
@@ -940,7 +949,7 @@ class Server(object):
         elif not (req.fid.qid.type & QDIR):
             self.respond(req, Ecreatenondir)
         elif hasattr(self.fs, 'create'):
-            self.fs.create(req)
+            self.fs.create(self, req)
         else:
             respond(req, Enocreate)
 
@@ -949,6 +958,7 @@ class Server(object):
             return
         req.fid.omode = req.ifcall.mode
         req.fid.qid = req.ofcall.qid
+        req.ofcall.iounit = self.msize - IOHDRSZ
 
     def tread(self, req):
         req.fid = req.sock.getfid(req.ifcall.fid)
@@ -1005,7 +1015,7 @@ class Server(object):
             self.respond(req, "write on fid with open mode 0x%ux" % req.fid.omode)
             return
         if hasattr(self.fs, 'write'):
-            self.fs.write(req)
+            self.fs.write(self, req)
         else:
             self.respond(req, 'no server write function')
 
@@ -1024,12 +1034,12 @@ class Server(object):
         return
 
     def tremove(self, req):
-        req.fid = req.sock.getfid(ifcall.fid)
+        req.fid = req.sock.getfid(req.ifcall.fid)
         if not req.fid:
             self.respond(req, Eunknownfid)
             return
-        if hasattr(self.fs.remove):
-            self.fs.remove(req)
+        if hasattr(self.fs, 'remove'):
+            self.fs.remove(self, req)
         else:
             self.respond(req, Enoremove)
 
@@ -1072,6 +1082,7 @@ class Client(object):
     CWD = 12
     F = 13
 
+    path = '' # for 'getwd' equivalent
     chatty = 0
     msg = None
     msize = 8192 + IOHDRSZ
@@ -1090,7 +1101,7 @@ class Client(object):
         if ifcall.tag != fcall.tag:
             raise RpcError("invalid tag received")
         if ifcall.type == Rerror:
-            raise RpcError([ifcall.ename])
+            raise RpcError(ifcall.ename)
         if ifcall.type != fcall.type + 1:
             raise ClientError("incorrect reply from server: %r" % [fcall.type,fcall.tag])
         return ifcall
@@ -1193,6 +1204,7 @@ class Client(object):
         if fcall.afid != NOFID:
             self._clunk(fcall.afid)
         self._walk(self.ROOT, self.CWD, [])
+        self.path = '/'
 
 
     # user accessible calls, the actual implementation of a client
@@ -1268,7 +1280,6 @@ class Client(object):
             self.close()
             raise
 
-    # XXX: need a better stat. return 'File' perhaps?
     def stat(self, pstr):
         ret = []
         if self.walk(pstr) is None:
@@ -1305,12 +1316,13 @@ class Client(object):
     def cd(self, pstr):
         q = self.walk(pstr)
         if q is None:
-            return
+            return 0
         if q and not (q[-1].type & QDIR):
             print "%s: not a directory" % pstr
             self.close()
-            return
+            return 0
         self.F, self.CWD = self.CWD, self.F
         self.close()
+        return 1
 
 

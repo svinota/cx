@@ -40,7 +40,7 @@ class HistoryConsole(code.InteractiveConsole):
 
     
 class CmdClient(py9p2.Client):
-    def mkdir(self, pstr, perm=0644):
+    def mkdir(self, pstr, perm=0755):
         self.create(pstr, perm | py9p2.DIR)
         self.close()
 
@@ -109,7 +109,12 @@ class CmdClient(py9p2.Client):
         if len(args) != 1:
             print "usage: cd path"
             return
-        self.cd(args[0])
+        if self.cd(args[0]):
+            if args[0][0] == '/':
+                self.path = os.path.normpath(args[0])
+            else:
+                self.path = os.path.normpath(self.path + "/" + args[0])
+            
 
     def _cmdio(self, args):
         if len(args) != 1:
@@ -156,6 +161,11 @@ class CmdClient(py9p2.Client):
         self.put(f2, inf)
         if f != '-':
             inf.close()
+    def _cmdpwd(self, args):
+        if len(args) == 0:
+            print os.path.normpath(self.path)
+        else:
+            print "usage: pwd"
     def _cmdrm(self, args):
         if len(args) == 1:
             self.rm(args[0])
@@ -164,7 +174,7 @@ class CmdClient(py9p2.Client):
     def _cmdhelp(self, args):
         cmds = [x[4:] for x in dir(self) if x[:4] == "_cmd"]
         cmds.sort()
-        print "Commands: ", " ".join(cmds)
+        print "commands: ", " ".join(cmds)
     def _cmdquit(self, args):
         self.done = 1
     _cmdexit = _cmdquit
@@ -218,11 +228,12 @@ class CmdClient(py9p2.Client):
             if n[:4] == "_cmd":
                 cmdf[n[4:]] = getattr(self, n)
 
+        self.done = 0
         if not cmds:
             cmds = None
-            
+        else:
+            self.done = 1 # exit after running the commands
         self.cmds = cmds
-        self.done = 1
         while 1:
             line = self._nextline()
             if line is None:
@@ -284,7 +295,10 @@ def main():
     if len(srvkey) == 2:
         user = srvkey[0]
         srvkey = srvkey[1]
+    else:
+        srvkey = srvkey[0]
 
+    print srvkey
     srvkey = srvkey.split(':', 2)
     if len(srvkey) == 2:
         port = int(srvkey[1])

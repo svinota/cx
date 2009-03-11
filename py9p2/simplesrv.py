@@ -54,7 +54,6 @@ class SampleFs(py9p2.Server):
         if not self.files.has_key(req.fid.qid.path):
             srv.respond(req, "unknown file")
         f = self.files[req.fid.qid.path]
-        print '%x'% req.ifcall.mode, '%x'% f.dir.mode
         if (req.ifcall.mode & f.dir.mode) != py9p2.OREAD :
             raise py9p2.ServerError("permission denied")
         srv.respond(req, None)
@@ -70,7 +69,7 @@ class SampleFs(py9p2.Server):
             return
 
         if req.ifcall.wname[0] == '..':
-            req.ofcall.wqid.append(f.parent.qid)
+            req.ofcall.wqid.append(f.parent.dir.qid)
             srv.respond(req, None)
             return
 
