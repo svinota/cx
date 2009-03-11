@@ -762,6 +762,7 @@ class Server(object):
                             if self.chatty:
                                 print >>sys.stderr, "socket closed: " + e.args[0]
                             self.selectpool.remove(s)
+                            s.close()
                         else:
                             raise
         if self.chatty:
