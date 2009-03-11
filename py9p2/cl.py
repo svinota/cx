@@ -8,9 +8,9 @@ import code
 import readline
 import atexit
 
-import py9p2
+import py9p
 
-class Error(py9p2.Error): pass
+class Error(py9p.Error): pass
 
 def _os(func, *args):
     try:
@@ -22,7 +22,7 @@ def _os(func, *args):
 
 class HistoryConsole(code.InteractiveConsole):
     def __init__(self, locals=None, filename="<console>",
-                 histfile=os.path.expanduser("~/.py9p2hist")):
+                 histfile=os.path.expanduser("~/.py9phist")):
         code.InteractiveConsole.__init__(self)
         self.init_history(histfile)
 
@@ -39,9 +39,9 @@ class HistoryConsole(code.InteractiveConsole):
         readline.write_history_file(histfile)
 
     
-class CmdClient(py9p2.Client):
+class CmdClient(py9p.Client):
     def mkdir(self, pstr, perm=0755):
-        self.create(pstr, perm | py9p2.DIR)
+        self.create(pstr, perm | py9p.DIR)
         self.close()
 
     def cat(self, name, out=None):
@@ -61,7 +61,7 @@ class CmdClient(py9p2.Client):
             inf = sys.stdin
         x = self.create(name)
         if x is None:
-            x = self.open(name, py9p2.OWRITE|py9p2.OTRUNC)
+            x = self.open(name, py9p.OWRITE|py9p.OTRUNC)
             if x is None:
                 return
         sz = 1024
@@ -81,7 +81,7 @@ class CmdClient(py9p2.Client):
             buf = ' '.join(args[1:])
 
         name = args[0]
-        x = self.open(name, py9p2.OWRITE|py9p2.OTRUNC)
+        x = self.open(name, py9p.OWRITE|py9p.OTRUNC)
         if x is None:
             return
         if buf != None:
@@ -245,7 +245,7 @@ class CmdClient(py9p2.Client):
             if cmd in cmdf:
                 try:
                     cmdf[cmd](args)
-                except py9p2.Error,e:
+                except py9p.Error,e:
                     print "%s error: %s" % (cmd, e.args[0])
                     if e.args[0] == 'client eof':
                         break
@@ -263,7 +263,7 @@ def main():
     prog = sys.argv[0]
     args = sys.argv[1:]
 
-    port = py9p2.PORT
+    port = py9p.PORT
     authsrv = None
     chatty = 0
     try:
@@ -325,10 +325,10 @@ def main():
     if passwd is not None:
         passwd = getpass.getpass()
     try:
-        cl = CmdClient(py9p2.Sock(sock), user, passwd, authsrv, chatty)
+        cl = CmdClient(py9p.Sock(sock), user, passwd, authsrv, chatty)
         readline.set_completer(cl.completer)
         cl.cmdLoop(cmd)
-    except py9p2.Error,e:
+    except py9p.Error,e:
         print e
 
 #'''

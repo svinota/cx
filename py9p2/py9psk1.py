@@ -307,15 +307,6 @@ class AuthFs(object):
         f.treq = [AuthTreq, self.user, self.dom, f.CHs, '', '']
         f.phase = self.HaveProtos
 
-    def _invalid(self, *args):
-        raise ServError("bad operation")
-    walk = _invalid
-    remove = _invalid
-    create = _invalid
-    open = _invalid
-
-    def exists(self, f):
-        return 1
     def clunk(self, f):
         pass
 

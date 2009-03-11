@@ -7,20 +7,20 @@ import os.path
 import copy
 import time
 
-import py9p2
+import py9p
 
 def _os(func, *args):
     try:
         return func(*args)
     except OSError,e:
-        raise py9p2.ServerError(e.args[1])
+        raise py9p.ServerError(e.args[1])
     except IOError,e:
-        raise py9p2.ServerError(e.args[1])
+        raise py9p.ServerError(e.args[1])
 
 def _nf(func, *args):
     try:
         return func(*args)
-    except py9p2.ServerError,e:
+    except py9p.ServerError,e:
         return
 
 def uidname(u):            # XXX
@@ -36,7 +36,8 @@ class LocalFs(object):
     def __init__(self, root, cancreate=0, dotu=0):
         self.dotu = dotu
         self.cancreate = cancreate 
-        self.root = py9p2.File(self.pathtodir(root), self.pathtodir(root))
+        self.root = py9p.File(self.pathtodir(root))
+        self.root.parent = self.root
         self.root.localpath = root
         self.files[self.root.dir.qid.path] = self.root
 
@@ -53,19 +54,19 @@ class LocalFs(object):
         res = s.st_mode & 0777
         type = 0
         if stat.S_ISDIR(s.st_mode):
-            type = type | py9p2.QDIR
-            res = res | py9p2.DIR #?
+            type = type | py9p.QDIR
+            res = res | py9p.DIR #?
             print "isdir!"
 
-        qid = py9p2.Qid(type, 0, py9p2.hash8(os.path.basename(f)))
+        qid = py9p.Qid(type, 0, py9p.hash8(os.path.basename(f)))
         if self.dotu:
-            return py9p2.Dir(1, 0, s.st_dev, qid,
+            return py9p.Dir(1, 0, s.st_dev, qid,
                 res,
                 int(s.st_atime), int(s.st_mtime),
                 s.st_size, os.path.basename(f), u, gidname(s.st_gid), u,
                 s.st_uid, s.st_gid, s.st_uid, '')
         else:
-            return py9p2.Dir(0, 0, s.st_dev, qid,
+            return py9p.Dir(0, 0, s.st_dev, qid,
                 res,
                 int(s.st_atime), int(s.st_mtime),
                 s.st_size, os.path.basename(f), u, gidname(s.st_gid), u)
@@ -78,15 +79,15 @@ class LocalFs(object):
         d = self.pathtodir(f.localpath)
 
         print "OPENNNNNNNNN: ", f.localpath
-        if (req.ifcall.mode & 3) == py9p2.OWRITE:
+        if (req.ifcall.mode & 3) == py9p.OWRITE:
             if not self.cancreate:
                 srv.respond(req, "read-only file server")
                 return
-            if req.ifcall.mode & py9p2.OTRUNC:
+            if req.ifcall.mode & py9p.OTRUNC:
                 m = "wb"
             else:
                 m = "r+b"        # almost
-        elif (req.ifcall.mode & 3) == py9p2.ORDWR:
+        elif (req.ifcall.mode & 3) == py9p.ORDWR:
             if not self.cancreate:
                 srv.respond(req, "read-only file server")
                 return
@@ -94,10 +95,10 @@ class LocalFs(object):
                 m = "w+b"
             else:
                 m = "r+b"
-        else:                # py9p2.OREAD and otherwise
+        else:                # py9p.OREAD and otherwise
             m = "rb"
 
-        if d.qid.type & py9p2.QDIR:
+        if d.qid.type & py9p.QDIR:
             # directories are handled at reading time
             srv.respond(req, None)
             return
@@ -114,8 +115,13 @@ class LocalFs(object):
         for path in req.ifcall.wname:
             # normpath takes care to remove '.' and '..', turn '//' into '/'
             npath = os.path.normpath(npath + "/" + path)
+            if len(npath) <= len(self.root.localpath):
+                # don't let us go beyond the original root
+                npath = self.root.localpath
+
             if srv.chatty:
                 print 'walk: from:', f.localpath, "now:", path, 'resulting:', npath
+
             if path == '.' or path == '':
                 req.ofcall.wqid.append(f.dir.qid)
             elif path == '..':
@@ -131,7 +137,7 @@ class LocalFs(object):
                     req.ofcall.wqid.append(d.qid)
                     f = nf
                 elif os.path.exists(npath):
-                    nf = py9p2.File(d, f)
+                    nf = py9p.File(d, f)
                     nf.localpath = npath
                     nf.parent = f
                     self.files[d.qid.path] = nf
@@ -152,7 +158,7 @@ class LocalFs(object):
             srv.respond(req, "read-only file server")
             return
 
-        if f.dir.qid.type & py9p2.QDIR:
+        if f.dir.qid.type & py9p.QDIR:
             _os(os.rmdir, f.localpath)
         else:
             _os(os.remove, f.localpath)
@@ -174,30 +180,30 @@ class LocalFs(object):
             return
         f = self.files[req.fid.qid.path]
         name = f.localpath+'/'+req.ifcall.name
-        if req.ifcall.perm & py9p2.DIR:
+        if req.ifcall.perm & py9p.DIR:
             perm = req.ifcall.perm & (~0777 | (f.dir.mode & 0777))
-            _os(os.mkdir, name, req.ifcall.perm & ~py9p2.DIR)
+            _os(os.mkdir, name, req.ifcall.perm & ~py9p.DIR)
         else:
             perm = req.ifcall.perm & (~0666 | (f.dir.mode & 0666))
             _os(file, name, "w+").close()
             _os(os.chmod, name, perm)
-            if (req.ifcall.mode & 3) == py9p2.OWRITE:
-                if req.ifcall.mode & py9p2.OTRUNC:
+            if (req.ifcall.mode & 3) == py9p.OWRITE:
+                if req.ifcall.mode & py9p.OTRUNC:
                     m = "wb"
                 else:
                     m = "r+b"        # almost
-            elif (req.ifcall.mode & 3) == py9p2.ORDWR:
+            elif (req.ifcall.mode & 3) == py9p.ORDWR:
                 if m & OTRUNC:
                     m = "w+b"
                 else:
                     m = "r+b"
-            else:                # py9p2.OREAD and otherwise
+            else:                # py9p.OREAD and otherwise
                 m = "rb"
 
             fd = _os(open, name, m)
 
         d = self.pathtodir(name)
-        self.files[d.qid.path] = py9p2.File(d, f)
+        self.files[d.qid.path] = py9p.File(d, f)
         self.files[d.qid.path].localpath = name
         if fd:
             self.files[d.qid.path].fd = fd
@@ -222,7 +228,7 @@ class LocalFs(object):
             srv.respond(req, "unknown file")
             return
 
-        if f.dir.qid.type & py9p2.QDIR:
+        if f.dir.qid.type & py9p.QDIR:
             # no need to add anything to self.files yet. wait until they walk to it
             l = os.listdir(f.localpath)
             l = filter(lambda x : x not in ('.','..'), l)
@@ -262,7 +268,7 @@ def main():
     prog = sys.argv[0]
     args = sys.argv[1:]
 
-    port = py9p2.PORT
+    port = py9p.PORT
     listen = '0.0.0.0'
     root = '/tmp'
     mods = []
@@ -296,18 +302,18 @@ def main():
         dom = None
         passwd = None
         key = None
-    else:
-        print >>sys.stderr, "authentication not supported"
-        usage(prog)
+#    else:
+#        print >>sys.stderr, "authentication not supported"
+#        usage(prog)
     elif len(args) != 2:
         usage(prog)
     else:
         user = args[0]
         dom = args[1]
         passwd = getpass.getpass()
-        key = py9p2sk1.makeKey(passwd)
+        key = py9psk1.makeKey(passwd)
 
-    srv = py9p2.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=chatty)
+    srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=chatty)
     srv.mount(LocalFs(root, cancreate, dotu))
 
     for m in mods:
