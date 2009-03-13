@@ -107,7 +107,7 @@ def main(prog, *args):
             print >>sys.stderr, "authentication requires user (-u) and domain (-d)"
             usage(prog)
         passwd = getpass.getpass()
-        key = p9sk1.makeKey(passwd)
+        key = py9psk1.makeKey(passwd)
 
     srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=dbg)
     srv.mount(SampleFs())
