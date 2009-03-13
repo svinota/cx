@@ -292,7 +292,6 @@ def main(prog, *args):
     if chatty:
         print "connecting as %s to %s, port %d" % (user, srv, port)
 
-    # 
     if passwd != None and authsrv is None:
         print >>sys.stderr, "assuming %s is also auth server" % srv
         authsrv = srv
