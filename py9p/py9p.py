@@ -8,6 +8,7 @@ import sys
 import socket
 import select
 import copy
+import traceback
 
 cmdName = {}
 def _enumCmd(*args):
@@ -592,7 +593,7 @@ class Server(object):
                 self._err(fd, tag, e.args[0])
                 return -1
             except Exception, e:
-                print >>sys.stderr, "unhandled exception: ", e.args[0]
+                print >>sys.stderr, "unhandled exception: ", traceback.print_exc()
                 self._err(fd, tag, e.args[0])
                 return -1
 
