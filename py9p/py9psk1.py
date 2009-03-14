@@ -362,5 +362,3 @@ class AuthFs(object):
             f.phase = self.HaveSauth
             return 72 + 13
         raise ServError("unexpected phase")
-
-
