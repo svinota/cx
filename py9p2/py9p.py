@@ -47,14 +47,39 @@ Ewalknotdir = "walk in non-directory"
 NOTAG = 0xffff
 NOFID = 0xffffffffL
 
-DIR = 020000000000L
-QDIR = 0x80
+# Qid.type
+QTDIR       =0x80        # type bit for directories 
+QTAPPEND    =0x40        # type bit for append only files 
+QTEXCL      =0x20        # type bit for exclusive use files 
+QTMOUNT     =0x10        # type bit for mounted channel 
+QTAUTH      =0x08        # type bit for authentication file 
+QTTMP       =0x04        # type bit for non-backed-up file 
+QTSYMLINK   =0x02        # type bit for symbolic link 
+QTFILE      =0x00        # type bits for plain file 
+
+# Dir.mode
+DMDIR       =0x80000000  # mode bit for directories 
+DMAPPEND    =0x40000000  # mode bit for append only files 
+DMEXCL      =0x20000000  # mode bit for exclusive use files 
+DMMOUNT     =0x10000000  # mode bit for mounted channel 
+DMAUTH      =0x08000000  # mode bit for authentication file 
+DMTMP       =0x04000000  # mode bit for non-backed-up file 
+DMSYMLINK   =0x02000000  # mode bit for symbolic link (Unix, 9P2000.u) 
+DMDEVICE    =0x00800000  # mode bit for device file (Unix, 9P2000.u) 
+DMNAMEDPIPE =0x00200000  # mode bit for named pipe (Unix, 9P2000.u) 
+DMSOCKET    =0x00100000  # mode bit for socket (Unix, 9P2000.u) 
+DMSETUID    =0x00080000  # mode bit for setuid (Unix, 9P2000.u) 
+DMSETGID    =0x00040000  # mode bit for setgid (Unix, 9P2000.u) 
+
+DMREAD      =0x4     # mode bit for read permission 
+DMWRITE     =0x2     # mode bit for write permission 
+DMEXEC      =0x1     # mode bit for execute permission 
+
 OREAD,OWRITE,ORDWR,OEXEC = range(4)
 AEXIST,AEXEC,AWRITE,AREAD = range(4)
-
 OTRUNC,ORCLOSE = 0x10,0x40
-IOHDRSZ = 24
 
+IOHDRSZ = 24
 PORT = 564
 
 class Error(Exception): pass
@@ -67,7 +92,7 @@ def modetostr(mode):
     def b(s):
         return bits[(mode>>s) & 7]
     d = "-"
-    if mode & DIR:
+    if mode & DMDIR:
         d = "d"
     return "%s%s%s%s" % (d, b(6), b(3), b(0))
 
@@ -168,16 +193,18 @@ class Qid:
         self.path = path
 
 class Fid:
-    def __init__(self, pool, fid, path=''):
+    def __init__(self, pool, fid, path='', auth=0):
+        if pool.has_key(fid):
+            return None
         self.fid = fid
         self.ref = 1
         self.omode=-1
-        if pool.has_key(fid):
-            return None
-        pool[fid] = self
+        self.auth = auth
         self.uid = None
         self.qid = None
         self.path = path
+
+        pool[fid] = self
 
 class Dir:
     # type:         server type
@@ -478,7 +505,7 @@ class Marshal9P(Marshal):
             self.encS(fcall.uname)
             self.encS(fcall.aname)
         elif fcall.type == Rauth:
-            self.encQ(fcall.qid)
+            self.encQ(fcall.aqid)
         elif fcall.type == Rerror:
             self.encS(fcall.ename)
         elif fcall.type == Tflush:
@@ -573,7 +600,7 @@ class Marshal9P(Marshal):
             fcall.uname = self.decS()
             fcall.aname = self.decS()
         elif fcall.type == Rauth:
-            fcall.qid = self.decQ()
+            fcall.aqid = self.decQ()
         elif fcall.type == Rerror:
             fcall.ename = self.decS()
         elif fcall.type == Tflush:
@@ -792,9 +819,13 @@ class Server(object):
             self.respond(req, "%s: authentication not required"%(sys.argv[0]))
             return
 
-        req.afid = Fid(req.sock.fids, fid)
+        req.afid = Fid(req.sock.fids, req.ifcall.afid, auth=1)
         if not req.afid:
             self.respond(req, Edupfid)
+        self.authfs.estab(req.afid)
+        req.afid.qid = Qid(QTAUTH, 0, hash8('#a'))
+        req.ofcall.aqid = req.afid.qid
+        self.respond(req, None)
 
     def rauth(self, req, error):
         if error and req.afid:
@@ -812,8 +843,14 @@ class Server(object):
             if not req.afid:
                 self.respond(req, Eunknownfid)
                 return
+            if req.afid.suid != req.ifcall.uname:
+                self.respond(req, "not authenticated as %r"%req.ifcall.uname)
+                return
+            elif self.chatty:
+                print >>sys.stderr, "authenticated as %r"%req.ifcall.uname
 
         req.fid.uid = req.ifcall.uname
+        req.sock.uname = req.ifcall.uname # now we know who we are
         if hasattr(self.fs, 'attach'):
             self.fs.attach()
         else:
@@ -856,7 +893,7 @@ class Server(object):
         if req.fid.omode != -1:
             self.respond(req, "cannot clone open fid")
             return
-        if len(req.ifcall.wname) and not (req.fid.qid.type & QDIR):
+        if len(req.ifcall.wname) and not (req.fid.qid.type & QTDIR):
             self.respond(req, Ewalknotdir)
             return
         if req.ifcall.fid != req.ifcall.newfid:
@@ -904,7 +941,7 @@ class Server(object):
         if req.fid.omode != -1:
             self.respond(req, Ebotch)
             return
-        if (req.fid.qid.type & QDIR) and ((req.ifcall.mode & (~ORCLOSE)) != OREAD):
+        if (req.fid.qid.type & QTDIR) and ((req.ifcall.mode & (~ORCLOSE)) != OREAD):
             self.respond(req, Eisdir)
             return
         req.ofcall.qid = req.fid.qid
@@ -925,7 +962,7 @@ class Server(object):
         if req.ifcall.mode & OTRUNC:
             p = p | AWRITE
 
-        if (req.fid.qid.type & QDIR) and (p != AREAD):
+        if (req.fid.qid.type & QTDIR) and (p != AREAD):
             self.respond(req, Eperm)
         if hasattr(self.fs, 'open'):
             self.fs.open(self, req)
@@ -937,7 +974,7 @@ class Server(object):
             return
         req.fid.omode = req.ifcall.mode
         req.fid.qid = req.ofcall.qid
-        if req.ofcall.qid.type & QDIR:
+        if req.ofcall.qid.type & QTDIR:
             req.fid.diroffset = 0
 
     def tcreate(self, req):
@@ -946,7 +983,7 @@ class Server(object):
             self.respond(req, Eunknownfid)
         elif req.fid.omode != -1:
             self.respond(req, Ebotch)
-        elif not (req.fid.qid.type & QDIR):
+        elif not (req.fid.qid.type & QTDIR):
             self.respond(req, Ecreatenondir)
         elif hasattr(self.fs, 'create'):
             self.fs.create(self, req)
@@ -968,8 +1005,12 @@ class Server(object):
         if req.ifcall.count < 0:
             self.respond(req, Ebotch)
             return
-        if req.ifcall.offset < 0 or ((req.fid.qid.type & QDIR) and (req.ifcall.offset != 0) and (req.ifcall.offset != req.fid.diroffset)):
+        if req.ifcall.offset < 0 or ((req.fid.qid.type & QTDIR) and (req.ifcall.offset != 0) and (req.ifcall.offset != req.fid.diroffset)):
             self.respond(req, Ebadoffset)
+            return
+
+        if req.fid.qid.type & QTAUTH and self.authfs:
+            self.authfs.read(self, req)
             return
 
         if req.ifcall.count > self.msize - IOHDRSZ:
@@ -987,7 +1028,7 @@ class Server(object):
         if error:
             return
 
-        if req.fid.qid.type & QDIR:
+        if req.fid.qid.type & QTDIR:
             data = []
             for x in req.ofcall.stat:
                 data = data + x.todata()
@@ -1008,6 +1049,11 @@ class Server(object):
         if req.ifcall.offset < 0:
             self.respond(req, Ebotch)
             return
+
+        if req.fid.qid.type & QTAUTH and self.authfs:
+            self.authfs.write(self, req)
+            return
+
         if req.ifcall.count > self.msize - IOHDRSZ:
             req.ifcall.count = self.msize - IOHDRSZ
         o = req.fid.omode & 3
@@ -1187,17 +1233,18 @@ class Client(object):
 
         fcall.afid = self.AFID
         try:
-            fcall = self._auth(fcall.afid, user, '')
+            rfcall = self._auth(fcall.afid, user, '')
         except RpcError,e:
             fcall.afid = NOFID
 
         if fcall.afid != NOFID:
+            fcall.aqid = rfcall.aqid
             if passwd is None:
                 raise ClientError("Password required")
 
             import py9psk1, socket
             try:
-                py9psk1.clientAuth(self, fcall.afid, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
+                py9psk1.clientAuth(self, fcall, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
             except socket.error,e:
                 raise ClientError("%s: %s" % (authsrv, e.args[1]))
         self._attach(self.ROOT, fcall.afid, user, "")
@@ -1317,7 +1364,7 @@ class Client(object):
         q = self.walk(pstr)
         if q is None:
             return 0
-        if q and not (q[-1].type & QDIR):
+        if q and not (q[-1].type & QTDIR):
             print "%s: not a directory" % pstr
             self.close()
             return 0

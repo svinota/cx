@@ -41,7 +41,7 @@ class HistoryConsole(code.InteractiveConsole):
     
 class CmdClient(py9p.Client):
     def mkdir(self, pstr, perm=0755):
-        self.create(pstr, perm | py9p.DIR)
+        self.create(pstr, perm|py9p.DMDIR)
         self.close()
 
     def cat(self, name, out=None):
@@ -298,11 +298,10 @@ def main():
     else:
         srvkey = srvkey[0]
 
-    print srvkey
     srvkey = srvkey.split(':', 2)
     if len(srvkey) == 2:
         port = int(srvkey[1])
-        srvkey = srvkey[0]
+    srvkey = srvkey[0]
 
     srv = srvkey
     if chatty:

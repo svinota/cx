@@ -8,6 +8,7 @@ import copy
 import time
 
 import py9p
+import py9psk1
 
 def _os(func, *args):
     try:
@@ -48,15 +49,13 @@ class LocalFs(object):
 
     def pathtodir(self, f):
         '''Stat-to-dir conversion'''
-        print "pathtodir: ", f
         s = _os(os.stat, f)
         u = uidname(s.st_uid)
         res = s.st_mode & 0777
         type = 0
         if stat.S_ISDIR(s.st_mode):
-            type = type | py9p.QDIR
-            res = res | py9p.DIR #?
-            print "isdir!"
+            type = type | py9p.QTDIR
+            res = res | py9p.DMDIR
 
         qid = py9p.Qid(type, 0, py9p.hash8(os.path.basename(f)))
         if self.dotu:
@@ -78,7 +77,6 @@ class LocalFs(object):
             return
         d = self.pathtodir(f.localpath)
 
-        print "OPENNNNNNNNN: ", f.localpath
         if (req.ifcall.mode & 3) == py9p.OWRITE:
             if not self.cancreate:
                 srv.respond(req, "read-only file server")
@@ -98,7 +96,7 @@ class LocalFs(object):
         else:                # py9p.OREAD and otherwise
             m = "rb"
 
-        if d.qid.type & py9p.QDIR:
+        if d.qid.type & py9p.QTDIR:
             # directories are handled at reading time
             srv.respond(req, None)
             return
@@ -158,7 +156,7 @@ class LocalFs(object):
             srv.respond(req, "read-only file server")
             return
 
-        if f.dir.qid.type & py9p.QDIR:
+        if f.dir.qid.type & py9p.QTDIR:
             _os(os.rmdir, f.localpath)
         else:
             _os(os.remove, f.localpath)
@@ -180,9 +178,9 @@ class LocalFs(object):
             return
         f = self.files[req.fid.qid.path]
         name = f.localpath+'/'+req.ifcall.name
-        if req.ifcall.perm & py9p.DIR:
+        if req.ifcall.perm & py9p.DMDIR:
             perm = req.ifcall.perm & (~0777 | (f.dir.mode & 0777))
-            _os(os.mkdir, name, req.ifcall.perm & ~py9p.DIR)
+            _os(os.mkdir, name, req.ifcall.perm & ~(py9p.DMDIR))
         else:
             perm = req.ifcall.perm & (~0666 | (f.dir.mode & 0666))
             _os(file, name, "w+").close()
@@ -199,7 +197,6 @@ class LocalFs(object):
                     m = "r+b"
             else:                # py9p.OREAD and otherwise
                 m = "rb"
-
             fd = _os(open, name, m)
 
         d = self.pathtodir(name)
@@ -228,12 +225,11 @@ class LocalFs(object):
             srv.respond(req, "unknown file")
             return
 
-        if f.dir.qid.type & py9p.QDIR:
+        if f.dir.qid.type & py9p.QTDIR:
             # no need to add anything to self.files yet. wait until they walk to it
             l = os.listdir(f.localpath)
             l = filter(lambda x : x not in ('.','..'), l)
             req.ofcall.stat = []
-            print "reading: ", f.localpath, "result: ", l
             for x in l:
                 req.ofcall.stat.append(self.pathtodir(f.localpath+'/'+x))
         else:
@@ -251,7 +247,6 @@ class LocalFs(object):
             srv.respond(req, "unknown file")
             return
 
-        print 'WRITIIIIIIIIING: ', req.ifcall.data
         f.fd.seek(req.ifcall.offset)
         f.fd.write(req.ifcall.data)
         req.ofcall.count = len(req.ifcall.data)
@@ -302,9 +297,6 @@ def main():
         dom = None
         passwd = None
         key = None
-#    else:
-#        print >>sys.stderr, "authentication not supported"
-#        usage(prog)
     elif len(args) != 2:
         usage(prog)
     else:
@@ -315,12 +307,6 @@ def main():
 
     srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=chatty)
     srv.mount(LocalFs(root, cancreate, dotu))
-
-    for m in mods:
-        x = __import__(m)
-        mount(x)
-        print '%s loaded.' % m
-
     srv.serve()
 
 #'''
