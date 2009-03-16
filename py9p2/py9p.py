@@ -709,6 +709,24 @@ class Server(object):
                     if self.chatty:
                         print >>sys.stderr, "accepted connection from: %s" % str(addr)
                 else:
+                    if hasattr(s, 'req'):
+                        # this is a fs-delayed req that's just become ready, 
+                        # assume client has a corresponding function call
+                        # since that's the only way they can call
+                        # regreadfd() to register here
+                        name = cmdName[s.req.ifcall.type][1:]
+                        try:
+                            func = getattr(self.fs, name)
+                            func(req)
+                        except:
+                            print >>sys.stderr, "error in delayed respond: ", traceback.print_exc()
+                            self.respond(req, "error in delayed response")
+                            # what a mess! should we be doing this at all?
+                            # how do we tell the fileserver that one of its
+                            # fds has disappeared?
+                            self.readpool.remove(s)
+                            del s
+                        continue
                     try:
                         self.fromnet(self.activesocks[s])
                     except socket.error, e:
@@ -738,7 +756,7 @@ class Server(object):
             try:
                 func(req, error)
             except Exception, e:
-                print >>sys.stderr, "error responding respond: ", traceback.print_exc()
+                print >>sys.stderr, "error in respond: ", traceback.print_exc()
                 return -1
         else:
             raise ServerError("can not handle message type " + cmdName[req.ifcall.type])
@@ -794,6 +812,18 @@ class Server(object):
             self.respond(req, "unhandled message: %s" % (cmdName[req.ifcall.type]))
             return -1
         return 0
+
+    def regreadfd(self, fd, req):
+        '''Register a file descriptor in the read pool. When a fileserver
+        wants to delay responding to a message they can register an fd and
+        have it polled for reading. When it's ready, the corresponding 'req'
+        will be called'''
+        fd.req = req
+        self.readpool.append(fd)
+
+    def delreadfd(self, fd):
+        '''Delete a fd registered with regreadfd() from the read pool'''
+        self.readpool.remove(fd)
 
     def tversion(self, req):
         if req.ifcall.version[0:2] != '9P': 
