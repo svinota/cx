@@ -229,6 +229,8 @@ class Dir:
 
     def __init__(self, dotu=0, *args):
         self.dotu = dotu
+        self.children = {}
+        self.parent = {}
         # the dotu arguments will be added separately. this is not
         # straightforward but is cleaner.
         if len(args):
@@ -284,17 +286,6 @@ class Dir:
             n.encS(self.muidnum)
         return n.bytes
 
-class File:
-    def __init__(self, dir, parent=None):
-        self.dir = dir
-        self.children = []
-        self.parent = parent
-
-    def findchild(self, name):
-        for x in self.children:
-            if x.dir.name == name:
-                return x
-        return None 
 class Req:
     def __init__(self, tag, fd = None, ifcall=None, ofcall=None, dir=None, oldreq=None,
     fid=None, afid=None, newfid=None):
@@ -717,7 +708,8 @@ class Server(object):
                         name = cmdName[s.req.ifcall.type][1:]
                         try:
                             func = getattr(self.fs, name)
-                            func(req)
+                            s.req.fromselect = 1
+                            func(srv, req)
                         except:
                             print >>sys.stderr, "error in delayed respond: ", traceback.print_exc()
                             self.respond(req, "error in delayed response")
@@ -884,8 +876,8 @@ class Server(object):
         if hasattr(self.fs, 'attach'):
             self.fs.attach()
         else:
-            req.ofcall.afid = self.fs.root.dir.qid
-            req.fid.qid = self.fs.root.dir.qid
+            req.ofcall.afid = self.fs.root.qid
+            req.fid.qid = self.fs.root.qid
             self.respond(req, None)
         return
 
@@ -937,8 +929,8 @@ class Server(object):
             req.newfid = req.fid
 
 #        if len(req.ifcall.wname) == 0 and self.fs.root:
-#            req.ofcall.wqid.append(self.fs.root.dir.qid)
-#            req.newfid.qid = self.fs.root.dir.qid
+#            req.ofcall.wqid.append(self.fs.root.qid)
+#            req.newfid.qid = self.fs.root.qid
 #            self.respond(req, None)
         if len(req.ifcall.wname) == 0:
             req.ofcall.wqid.append(req.fid.qid)

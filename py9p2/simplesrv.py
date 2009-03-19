@@ -4,9 +4,9 @@ import sys
 import getopt
 import os
 import copy
-import py9p2
+import py9p
 
-class SampleFs(py9p2.Server):
+class SampleFs(py9p.Server):
     """
     A sample plugin filesystem.
     """
@@ -15,7 +15,7 @@ class SampleFs(py9p2.Server):
     files = {}
     def __init__(self):
         self.start = int(time.time())
-        rootdir = py9p2.Dir(0)    # not dotu
+        rootdir = py9p.Dir(0)    # not dotu
         rootdir.type = 0
         rootdir.dev = 0
         rootdir.mode = 0755
@@ -23,29 +23,29 @@ class SampleFs(py9p2.Server):
         rootdir.length = 0
         rootdir.name = '/'
         rootdir.uid = rootdir.gid = rootdir.muid = os.environ['USER']
-        rootdir.qid = py9p2.Qid(py9p2.QDIR, 0, py9p2.hash8(rootdir.name))
-        self.root = py9p2.File(rootdir, rootdir)    # / is its own parent, just so we don't fall off the edge of the earth
+        rootdir.qid = py9p.Qid(py9p.QDIR, 0, py9p.hash8(rootdir.name))
+        self.root = py9p.File(rootdir, rootdir)    # / is its own parent, just so we don't fall off the edge of the earth
 
         # two files in '/'
         f = copy.copy(rootdir)
         f.name = 'sample1'
-        f.qid = py9p2.Qid(0, 0, py9p2.hash8(f.name))
+        f.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
         f.length = 1024
-        self.root.children.append(py9p2.File(f, rootdir))
+        self.root.addchild(py9p.File(f, rootdir))
         f = copy.copy(f)
         f.name = 'sample2'
         f.length = 8192
-        f.qid = py9p2.Qid(0, 0, py9p2.hash8(f.name))
-        self.root.children.append(py9p2.File(f, rootdir))
+        f.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
+        self.root.addchild(py9p.File(f, rootdir))
 
         # an empty dir in '/'
         dir = copy.copy(rootdir)
         dir.name = 'dir'
-        dir.qid = py9p2.Qid(0, 0, py9p2.hash8(f.name))
+        dir.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
 
         # add everybody to the easy lookup table for Files
         self.files[self.root.dir.qid.path] = self.root
-        for x in self.root.children:
+        for x in self.root.getchildren():
             self.files[x.dir.qid.path] = x
 
     def open(self, srv, req):
@@ -54,8 +54,8 @@ class SampleFs(py9p2.Server):
         if not self.files.has_key(req.fid.qid.path):
             srv.respond(req, "unknown file")
         f = self.files[req.fid.qid.path]
-        if (req.ifcall.mode & f.dir.mode) != py9p2.OREAD :
-            raise py9p2.ServerError("permission denied")
+        if (req.ifcall.mode & f.dir.mode) != py9p.OREAD :
+            raise py9p.ServerError("permission denied")
         srv.respond(req, None)
 
     def walk(self, srv, req):
@@ -84,12 +84,12 @@ class SampleFs(py9p2.Server):
 
     def read(self, srv, req):
         if not self.files.has_key(req.fid.qid.path):
-            raise py9p2.ServError("unknown file")
+            raise py9p.ServError("unknown file")
 
         f = self.files[req.fid.qid.path]
-        if f.dir.qid.type & py9p2.QDIR:
+        if f.dir.qid.type & py9p.QDIR:
             req.ofcall.stat = []
-            for x in f.children:
+            for x in f.getchildren():
                 req.ofcall.stat.append(x.dir)
         elif f.dir.name == 'sample1':
             buf = '%d\n' % time.time()
@@ -109,7 +109,7 @@ def usage(argv0):
 
 def main(prog, *args):
     listen = 'localhost'
-    port = py9p2.PORT
+    port = py9p.PORT
     mods = []
     noauth = 0
     dbg = False
@@ -147,7 +147,7 @@ def main(prog, *args):
         passwd = getpass.getpass()
         key = p9sk1.makeKey(passwd)
 
-    srv = py9p2.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=dbg)
+    srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=dbg)
     srv.mount(SampleFs())
 
 
