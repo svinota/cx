@@ -41,7 +41,7 @@ class HistoryConsole(code.InteractiveConsole):
     
 class CmdClient(py9p.Client):
     def mkdir(self, pstr, perm=0755):
-        self.create(pstr, perm | py9p.DIR)
+        self.create(pstr, perm|py9p.DMDIR)
         self.close()
 
     def cat(self, name, out=None):
@@ -50,7 +50,7 @@ class CmdClient(py9p.Client):
         if self.open(name) is None:
             return
         while 1:
-            buf = self.read(8192*2)
+            buf = self.read(self.msize)
             if len(buf) == 0:
                 break
             out.write(buf)
@@ -109,7 +109,12 @@ class CmdClient(py9p.Client):
         if len(args) != 1:
             print "usage: cd path"
             return
-        self.cd(args[0])
+        if self.cd(args[0]):
+            if args[0][0] == '/':
+                self.path = os.path.normpath(args[0])
+            else:
+                self.path = os.path.normpath(self.path + "/" + args[0])
+            
 
     def _cmdio(self, args):
         if len(args) != 1:
@@ -156,6 +161,11 @@ class CmdClient(py9p.Client):
         self.put(f2, inf)
         if f != '-':
             inf.close()
+    def _cmdpwd(self, args):
+        if len(args) == 0:
+            print os.path.normpath(self.path)
+        else:
+            print "usage: pwd"
     def _cmdrm(self, args):
         if len(args) == 1:
             self.rm(args[0])
@@ -164,7 +174,7 @@ class CmdClient(py9p.Client):
     def _cmdhelp(self, args):
         cmds = [x[4:] for x in dir(self) if x[:4] == "_cmd"]
         cmds.sort()
-        print "Commands: ", " ".join(cmds)
+        print "commands: ", " ".join(cmds)
     def _cmdquit(self, args):
         self.done = 1
     _cmdexit = _cmdquit
@@ -236,8 +246,8 @@ class CmdClient(py9p.Client):
                 try:
                     cmdf[cmd](args)
                 except py9p.Error,e:
-                    print "%s: %s" % (cmd, e.args[0])
-                    if e.args[0] == 'Client EOF':
+                    print "%s error: %s" % (cmd, e.args[0])
+                    if e.args[0] == 'client eof':
                         break
             else:
                 sys.stdout.write("%s ?\n" % cmd)
@@ -248,7 +258,11 @@ def usage(prog):
     print "usage: %s [-dn] [-a authsrv] [user@]srv[:port] [cmd ...]" % prog
     sys.exit(1)
     
-def main(prog, *args):
+def main():
+
+    prog = sys.argv[0]
+    args = sys.argv[1:]
+
     port = py9p.PORT
     authsrv = None
     chatty = 0
@@ -276,6 +290,7 @@ def main(prog, *args):
     if len(args) < 1:
         print >>sys.stderr, "error: no server to connect to..."
         usage(prog)
+
     srvkey = args[0].split('@', 2)
     if len(srvkey) == 2:
         user = srvkey[0]
@@ -292,6 +307,7 @@ def main(prog, *args):
     if chatty:
         print "connecting as %s to %s, port %d" % (user, srv, port)
 
+    # 
     if passwd != None and authsrv is None:
         print >>sys.stderr, "assuming %s is also auth server" % srv
         authsrv = srv
@@ -314,14 +330,31 @@ def main(prog, *args):
     except py9p.Error,e:
         print e
 
+#'''
 if __name__ == "__main__":
     try:
-        main(*sys.argv)
+        main()
     except KeyboardInterrupt:
         print "interrupted."
     except EOFError:
         print "done."
     except Exception, m:
-        print "unknown exception: " + m.args[0]
+        print "unhandled exception: " + str(m.args)
         raise
+'''
+if __name__ == "__main__":
+    import trace
 
+    # create a Trace object, telling it what to ignore, and whether to
+    # do tracing or line-counting or both.
+    tracer = trace.Trace(
+        ignoredirs=[sys.prefix, sys.exec_prefix],
+        trace=1,
+        count=1)
+
+    # run the new command using the given tracer
+    tracer.run('main()')
+    # make a report, placing output in /tmp
+    r = tracer.results()
+    r.write_results(show_missing=True, coverdir="/tmp")
+#'''
