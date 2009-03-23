@@ -25,8 +25,11 @@ AuthTs,AuthTc,AuthAs,AuthAc,AuthTp,AuthHr = range(64, 70)
 
 AUTHPORT = 567
 
+def pad(str, l, padch='\0'):
+    str += padch * (l - len(str))
+    return str[:l]
 
-_par = [ 0x01, 0x02, 0x04, 0x07, 0x08, 0x0b, 0x0d, 0x0e, 
+par = [ 0x01, 0x02, 0x04, 0x07, 0x08, 0x0b, 0x0d, 0x0e, 
 	0x10, 0x13, 0x15, 0x16, 0x19, 0x1a, 0x1c, 0x1f, 
 	0x20, 0x23, 0x25, 0x26, 0x29, 0x2a, 0x2c, 0x2f, 
 	0x31, 0x32, 0x34, 0x37, 0x38, 0x3b, 0x3d, 0x3e, 
@@ -42,7 +45,7 @@ _par = [ 0x01, 0x02, 0x04, 0x07, 0x08, 0x0b, 0x0d, 0x0e,
 	0xd0, 0xd3, 0xd5, 0xd6, 0xd9, 0xda, 0xdc, 0xdf, 
 	0xe0, 0xe3, 0xe5, 0xe6, 0xe9, 0xea, 0xec, 0xef, 
 	0xf1, 0xf2, 0xf4, 0xf7, 0xf8, 0xfb, 0xfd, 0xfe ]
-def _expandKey(key):
+def expandKey(key):
 	"""Expand a 7-byte DES key into an 8-byte DES key"""
 	k = map(ord, key)
 	k64 = [ k[0]>>1,
@@ -53,10 +56,10 @@ def _expandKey(key):
 			(k[5]>>6) | (k[4]<<2),
 			(k[6]>>7) | (k[5]<<1),
 			k[6]<<0]
-	return "".join([chr(_par[x & 0x7f]) for x in k64])
+	return "".join([chr(par[x & 0x7f]) for x in k64])
 
-def _newKey(key):
-	return DES.new(_expandKey(key), DES.MODE_ECB)
+def newKey(key):
+	return DES.new(expandKey(key), DES.MODE_ECB)
 
 def lencrypt(key, l):
 	"""Encrypt a list of characters, returning a list of characters"""
@@ -70,7 +73,7 @@ def makeKey(password):
 	"""
 	password = password[:28-1] + '\0'
 	n = len(password) - 1
-	password = py9p.pad(password, 28, ' ')
+	password = pad(password, 28, ' ')
 	buf = list(password)
 	while 1:
 		t = map(ord, buf[:8])
@@ -84,7 +87,7 @@ def makeKey(password):
 			buf[:n] = []
 		else:
 			buf[:8] = []
-		buf[:8] = lencrypt(_newKey(key), buf[:8])
+		buf[:8] = lencrypt(newKey(key), buf[:8])
 
 def randChars(n):
 	"""
@@ -100,11 +103,11 @@ class Marshal(py9p.Marshal):
 		self.kn = None
 
 	def setKs(self, ks):
-		self.ks = _newKey(ks)
+		self.ks = newKey(ks)
 	def setKn(self, kn):
-		self.kn = _newKey(kn)
+		self.kn = newKey(kn)
 
-	def _encrypt(self, n, key):
+	def encrypt(self, n, key):
 		"""Encrypt the last n bytes of the buffer with weird chaining."""
 		idx = len(self.bytes) - n
 		n -= 1
@@ -113,7 +116,7 @@ class Marshal(py9p.Marshal):
 			idx += 7
 		if n % 7:
 			self.bytes[-8:] = lencrypt(key, self.bytes[-8:])
-	def _decrypt(self, n, key):
+	def decrypt(self, n, key):
 		"""Decrypt the first n bytes of the buffer."""
 		if key is None:
 			return
@@ -125,74 +128,74 @@ class Marshal(py9p.Marshal):
 			idx -= 7
 			self.bytes[idx: idx+8] = ldecrypt(key, self.bytes[idx: idx+8])
 
-	def _encPad(self, x, l):
-		self._encX(py9p.pad(x, l))
-	def _decPad(self, l):
-		x = self._decX(l)
+	def encPad(self, x, l):
+		self.encX(pad(x, l))
+	def decPad(self, l):
+		x = self.decX(l)
 		idx = x.find('\0')
 		if idx >= 0:
 			x = x[:idx]
 		return x
 
-	def _encChal(self, x):
+	def encChal(self, x):
 		self._checkLen(x, 8)
-		self._encX(x)
-	def _decChal(self):
-		return self._decX(8)
+		self.encX(x)
+	def decChal(self):
+		return self.decX(8)
 
-	def _encTicketReq(self, x):
+	def encTicketReq(self, x):
 		type,authid,authdom,chal,hostid,uid = x
-		self._enc1(type)
-		self._encPad(authid, 28)
-		self._encPad(authdom, 48)
-		self._encChal(chal)
-		self._encPad(hostid, 28)
-		self._encPad(uid, 28)
-	def _decTicketReq(self):
-		return [self._dec1(),
-			self._decPad(28),
-			self._decPad(48),
-			self._decChal(),
-			self._decPad(28),
-			self._decPad(28)]
+		self.enc1(type)
+		self.encPad(authid, 28)
+		self.encPad(authdom, 48)
+		self.encChal(chal)
+		self.encPad(hostid, 28)
+		self.encPad(uid, 28)
+	def decTicketReq(self):
+		return [self.dec1(),
+			self.decPad(28),
+			self.decPad(48),
+			self.decChal(),
+			self.decPad(28),
+			self.decPad(28)]
 
-	def _encTicket(self, x):
+	def encTicket(self, x):
 		num,chal,cuid,suid,key = x
 		self._checkLen(key, 7)
-		self._enc1(num)
-		self._encChal(chal)
-		self._encPad(cuid, 28)
-		self._encPad(suid, 28)
-		self._encX(key)
-		self._encrypt(1 + 8 + 28 + 28 + 7, self.ks)
+		self.enc1(num)
+		self.encChal(chal)
+		self.encPad(cuid, 28)
+		self.encPad(suid, 28)
+		self.encX(key)
+		self.encrypt(1 + 8 + 28 + 28 + 7, self.ks)
 
-	def _decTicket(self):
-		self._decrypt(1 + 8 + 28 + 28 + 7, self.ks)
-		return [self._dec1(),
-			self._decChal(),
-			self._decPad(28),
-			self._decPad(28),
-			self._decX(7)]
+	def decTicket(self):
+		self.decrypt(1 + 8 + 28 + 28 + 7, self.ks)
+		return [self.dec1(),
+			self.decChal(),
+			self.decPad(28),
+			self.decPad(28),
+			self.decX(7)]
 
-	def _encAuth(self, x):
+	def encAuth(self, x):
 		num,chal,id = x
-		self._enc1(num)
-		self._encChal(chal)
-		self._enc4(id)
-		self._encrypt(1 + 8 + 4, self.kn)
-	def _decAuth(self):
-		self._decrypt(1 + 8 + 4, self.kn)
-		return [self._dec1(),
-			self._decChal(),
-			self._dec4()]
+		self.enc1(num)
+		self.encChal(chal)
+		self.enc4(id)
+		self.encrypt(1 + 8 + 4, self.kn)
+	def decAuth(self):
+		self.decrypt(1 + 8 + 4, self.kn)
+		return [self.dec1(),
+			self.decChal(),
+			self.dec4()]
 
-	def _encTattach(self, x):
+	def encTattach(self, x):
 		tick,auth = x
 		self._checkLen(tick, 72)
-		self._encX(tick)
-		self._encAuth(auth)
-	def _decTattach(self):
-		return self._decX(72), self._decAuth()
+		self.encX(tick)
+		self.encAuth(auth)
+	def decTattach(self):
+		return self.decX(72), self.decAuth()
 
 def getTicket(con, sk1, treq):
 	"""
@@ -203,7 +206,7 @@ def getTicket(con, sk1, treq):
 	Raises an AuthsrvError on failure.
 	"""
 	sk1.setBuf()
-	sk1._encTicketReq(treq)
+	sk1.encTicketReq(treq)
 	con.send(sk1.getBuf())
 	ch = con.recv(1)
 	if ch == chr(5):
@@ -216,10 +219,10 @@ def getTicket(con, sk1, treq):
 	if len(stick) + len(ctick) != 72*2:
 		raise AuthsrvError("short auth reply")
 	sk1.setBuf(ctick)
-	return sk1._decTicket(), stick
+	return sk1.decTicket(), stick
 
 # this could be cleaner
-def clientAuth(cl, afid, user, Kc, authsrv, authport=567):
+def clientAuth(cl, fcall, user, Kc, authsrv, authport=567):
 	CHc = randChars(8)
 	sk1 = Marshal()
 	sk1.setKs(Kc)
@@ -227,13 +230,13 @@ def clientAuth(cl, afid, user, Kc, authsrv, authport=567):
 	gen = 0
 
 	def rd(l):
-		x = cl._read(afid, pos[0], l)
-		pos[0] += len(x)
-		return x
+		fc = cl._read(fcall.afid, pos[0], l)
+		pos[0] += len(fc.data)
+		return fc.data
 	def wr(x):
-		l = cl._write(afid, pos[0], x)
-		pos[0] += l
-		return l
+		fc = cl._write(fcall.afid, pos[0], x)
+		pos[0] += fc.count
+		return fc.count
 
 	# negotiate
 	proto = rd(128)
@@ -250,12 +253,12 @@ def clientAuth(cl, afid, user, Kc, authsrv, authport=567):
 
 	# Tsession
 	sk1.setBuf()
-	sk1._encChal(CHc)
+	sk1.encChal(CHc)
 	wr(sk1.getBuf())
 
 	# Rsession
 	sk1.setBuf(rd(TickReqLen))
-	treq = sk1._decTicketReq()
+	treq = sk1.decTicketReq()
 	if v2 and treq[0] == 0:		# kenfs is fast and loose with auth formats
 		treq[0] = AuthTreq;
 	if treq[0] != AuthTreq:
@@ -274,11 +277,11 @@ def clientAuth(cl, afid, user, Kc, authsrv, authport=567):
 
 	# Tattach
 	sk1.setBuf()
-	sk1._encTattach([stick, [AuthAc, CHs, gen]])
+	sk1.encTattach([stick, [AuthAc, CHs, gen]])
 	wr(sk1.getBuf())
 
 	sk1.setBuf(rd(AuthLen))
-	num,CHc2,gen2 = sk1._decAuth()
+	num,CHc2,gen2 = sk1.decAuth()
 	if num != AuthAs or CHc2 != CHc:			# XXX check gen2 for replay
 		raise AuthError("bad server")
 	return
@@ -297,68 +300,71 @@ class AuthFs(object):
         self.user = user
         self.dom = dom
         self.ks = key
+    def estab(self, fid):
+        fid.CHs = randChars(8)
+        fid.CHc = None
+        fid.suid = None
+        fid.treq = [AuthTreq, self.user, self.dom, fid.CHs, '', '']
+        fid.phase = self.HaveProtos
 
-    def estab(self, f, isroot):
-        f.isdir = 0
-        f.odev = self
-        f.CHs = randChars(8)
-        f.CHc = None
-        f.suid = None
-        f.treq = [AuthTreq, self.user, self.dom, f.CHs, '', '']
-        f.phase = self.HaveProtos
+    def read(self, srv, req):
+        pos = req.ifcall.offset
+        len = req.ifcall.count
 
-    def _invalid(self, *args):
-        raise ServError("bad operation")
-    walk = _invalid
-    remove = _invalid
-    create = _invalid
-    open = _invalid
-
-    def exists(self, f):
-        return 1
-    def clunk(self, f):
-        pass
-
-    def read(self, f, pos, len):
         self.sk1.setBuf()
-        if f.phase == self.HaveProtos:
-            f.phase = self.NeedProto
-            return "p9sk1@%s\0" % self.dom
-        elif f.phase == self.HaveSinfo:
-            f.phase = self.NeedTicket
-            self.sk1._encTicketReq(f.treq)
-            return self.sk1.getBuf()
-        elif f.phase == self.HaveSauth:
-            f.phase = self.Success
-            self.sk1._encAuth([AuthAs, f.CHc, 0])
-            return self.sk1.getBuf()
-        raise ServError("unexpected phase")
+        if req.fid.phase == self.HaveProtos:
+            req.fid.phase = self.NeedProto
+            req.ofcall.data = "p9sk1@%s\0" % self.dom
+            srv.respond(req, None)
+            return
+        elif req.fid.phase == self.HaveSinfo:
+            req.fid.phase = self.NeedTicket
+            self.sk1.encTicketReq(req.fid.treq)
+            req.ofcall.data = self.sk1.getBuf()
+            srv.respond(req, None)
+            return
+        elif req.fid.phase == self.HaveSauth:
+            req.fid.phase = self.Success
+            self.sk1.encAuth([AuthAs, req.fid.CHc, 0])
+            req.ofcall.data = self.sk1.getBuf()
+            srv.respond(req, None)
+            return
+        srv.respond(req, "unexpected phase")
 
-    def write(self, f, pos, buf):
+    def write(self, srv, req):
+        pos = req.ifcall.offset
+        buf = req.ifcall.data
+
         self.sk1.setBuf(buf)
-        if f.phase == self.NeedProto:
+        if req.fid.phase == self.NeedProto:
             l = buf.index("\0")
             if l < 0:
                 raise ServError("missing terminator")
             s = buf.split(" ")
             if len(s) != 2 or s[0] != "p9sk1" or s[1] != self.dom + '\0':
                 raise ServError("bad protocol %r" % buf)
-            f.phase = self.NeedCchal
-            return l + 1
-        elif f.phase == self.NeedCchal:
-            f.CHc = self.sk1._decChal()
-            f.phase = self.HaveSinfo
-            return 8
-        elif f.phase == self.NeedTicket:
+            req.fid.phase = self.NeedCchal
+            req.ofcall.count = l + 1
+            srv.respond(req, None)
+            return
+        elif req.fid.phase == self.NeedCchal:
+            req.fid.CHc = self.sk1.decChal()
+            req.fid.phase = self.HaveSinfo
+            req.ofcall.count = 8
+            srv.respond(req, None)
+            return
+        elif req.fid.phase == self.NeedTicket:
             self.sk1.setKs(self.ks)
-            num,chal,cuid,suid,key = self.sk1._decTicket()
-            if num != AuthTs or chal != f.CHs:
+            num,chal,cuid,suid,key = self.sk1.decTicket()
+            if num != AuthTs or chal != req.fid.CHs:
                 raise ServError("bad ticket")
             self.sk1.setKn(key)
-            num,chal,id = self.sk1._decAuth()
-            if num != AuthAc or chal != f.CHs or id != 0:
+            num,chal,id = self.sk1.decAuth()
+            if num != AuthAc or chal != req.fid.CHs or id != 0:
                 raise ServError("bad authentication for %s" % suid)
-            f.suid = suid
-            f.phase = self.HaveSauth
-            return 72 + 13
+            req.fid.suid = suid
+            req.fid.phase = self.HaveSauth
+            req.ofcall.count = 72 + 13
+            srv.respond(req, None)
+            return
         raise ServError("unexpected phase")

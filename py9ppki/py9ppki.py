@@ -17,6 +17,7 @@ http://www.amk.ca/python/writing/pycrypt/pycrypt.html
 """
 
 import md5, base64, struct, os, random
+import cPickle as pickle
 import Crypto.Util as util
 import Crypto.Cipher.DES3 as DES3
 from Crypto.Cipher import DES
@@ -250,7 +251,7 @@ class AuthFs(object):
         f.chal = getchallenge()
 
     def _invalid(self, *args):
-        raise ServError("bad operation")
+        raise py9p.ServerError("bad operation")
     walk = _invalid
     remove = _invalid
     create = _invalid
@@ -265,19 +266,24 @@ class AuthFs(object):
         if f.phase == self.HaveChal:
             f.phase = self.NeedSign
             print 'auth: chal:', f.chal
-            return f.chal
+            print 'auth: encrypted:', f.key.encrypt(f.chal, '')
+            return pickle.dumps(f.key.encrypt(f.chal, ''))
         elif f.phase == self.Success:
             return 'success as ' + f.suid
-        raise ServError("unexpected phase")
+        raise py9p.ServerError("unexpected phase")
 
     def write(self, f, pos, buf):
         if f.phase == self.NeedSign:
             print 'auth: sign:', buf
-            if f.key.verify(f.chal, (long(buf),)):
+            signature = pickle.loads(buf)
+            print "here's what we have to verify:", str(signature)
+            if f.key.verify(f.chal, signature):
                 f.phase = self.Success
                 f.suid = self.uname
                 return len(buf)
-        raise ServError("unexpected phase")
+            else:
+                raise py9p.ServerError('signature not verified')
+        raise py9p.ServerError("unexpected phase")
 
 def clientAuth(cl, afid, uname):
     pos = [0]
@@ -292,14 +298,16 @@ def clientAuth(cl, afid, uname):
 
     # XXX here we would have to ask for privkey password 
     key = getprivkey(uname)
-    c = rd(16)
-    print "auth: read challenge: %s"%c
-    sign = key.sign(c, '')
+    c = pickle.loads(rd(2048))
+    print "auth: read challenge: %s"%str(c)
+    chal = key.decrypt(c)
+    print "auth: decrypted challenge: %s"%chal
+    sign = key.sign(chal, '')
     print "auth: signed:", sign[0]
     print 'auth:' + str(sign)
 
-    wr(str(sign[0]))
-    res = rd(128)
+    wr(pickle.dumps(sign))
+    res = rd(2048)
     print "auth: response: %s"%res
 
     return
