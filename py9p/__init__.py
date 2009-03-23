@@ -10,6 +10,7 @@ __all__ = []
 for subpackage in [
     'py9p',
     'py9psk1',
+    'py9ppki',
     ]:
     try:
         exec 'import ' + subpackage

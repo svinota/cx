@@ -666,12 +666,17 @@ class Server(object):
     writepool = []
     activesocks = {}
 
-    def __init__(self, listen, fs=None, user=None, dom=None, key=None, chatty=False, dotu=False):
-        if user == None:
+    def __init__(self, listen, authmode=None, fs=None, user=None, dom=None, key=None, chatty=False, dotu=False):
+        if authmode == None:
             self.authfs = None
-        else:
+		elif authmode == 'pki':
             import py9psk1
             self.authfs = py9psk1.AuthFs(user, dom, key)
+        elif authmode == sk1:
+            import py9psk1
+            self.authfs = py9psk1.AuthFs(user, dom, key)
+		else:
+			raise ServerError("unsupported auth mode")
 
         self.fs = fs
         self.dotu = dotu
