@@ -23,25 +23,25 @@ class SampleFs(py9p.Server):
         rootdir.length = 0
         rootdir.name = '/'
         rootdir.uid = rootdir.gid = rootdir.muid = os.environ['USER']
-        rootdir.qid = py9p.Qid(py9p2.QDIR, 0, py9p2.hash8(rootdir.name))
+        rootdir.qid = py9p.Qid(py9p.QTDIR, 0, py9p.hash8(rootdir.name))
         self.root = py9p.File(rootdir, rootdir)    # / is its own parent, just so we don't fall off the edge of the earth
 
         # two files in '/'
         f = copy.copy(rootdir)
         f.name = 'sample1'
-        f.qid = py9p.Qid(0, 0, py9p2.hash8(f.name))
+        f.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
         f.length = 1024
         self.root.children.append(py9p.File(f, rootdir))
         f = copy.copy(f)
         f.name = 'sample2'
         f.length = 8192
-        f.qid = py9p.Qid(0, 0, py9p2.hash8(f.name))
+        f.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
         self.root.children.append(py9p.File(f, rootdir))
 
         # an empty dir in '/'
         dir = copy.copy(rootdir)
         dir.name = 'dir'
-        dir.qid = py9p.Qid(0, 0, py9p2.hash8(f.name))
+        dir.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
 
         # add everybody to the easy lookup table for Files
         self.files[self.root.dir.qid.path] = self.root
@@ -87,7 +87,7 @@ class SampleFs(py9p.Server):
             raise py9p.ServError("unknown file")
 
         f = self.files[req.fid.qid.path]
-        if f.dir.qid.type & py9p.QDIR:
+        if f.dir.qid.type & py9p.QTDIR:
             req.ofcall.stat = []
             for x in f.children:
                 req.ofcall.stat.append(x.dir)
