@@ -104,7 +104,7 @@ class SampleFs(py9p.Server):
         srv.respond(req, None)
 
 def usage(argv0):
-    print "usage:  %s [-nD] [-p port] [-u user] [-d domain]" % argv0
+    print "usage:  %s [-D] [-p port] [-u user] [-d domain] [-a authmode] [srvuser domain]" % argv0
     sys.exit(1)
 
 def main(prog, *args):
@@ -115,9 +115,10 @@ def main(prog, *args):
     dbg = False
     user = None
     dom = None
+    authmode = None
 
     try:
-        opt,args = getopt.getopt(args, "Dnp:l:u:d:")
+        opt,args = getopt.getopt(args, "Dnp:l:u:d:a:")
     except Exception, msg:
         usage(prog)
     for opt,optarg in opt:
@@ -133,23 +134,31 @@ def main(prog, *args):
             user = optarg
         if opt == '-d':
             dom = optarg
-            
+        if opt == '-a':
+            authmode = optarg
 
-    if(noauth):
+    if(authmode == None or authmode == 'none'):
+        authmode == None
         user = None
         dom = None
         passwd = None
         key = None
-    else:
-        if user == None or dom == None:
-            print >>sys.stderr, "authentication requires user (-u) and domain (-d)"
+    elif authmode == 'sk1':
+        if len(args) != 2:
             usage(prog)
-        passwd = getpass.getpass()
-        key = p9sk1.makeKey(passwd)
+        else:
+            user = args[0]
+            dom = args[1]
+            passwd = getpass.getpass()
+            key = py9p.sk1.makeKey(passwd)
+    elif authmode == 'pki':
+        user = 'admin'
+    else:
+        print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
+        sys.exit(1)
 
     srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=dbg)
     srv.mount(SampleFs())
-
 
     for m in mods:
         if os.path.dirname(m) != '':

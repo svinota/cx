@@ -1,5 +1,4 @@
 import py9p
-
 class Marshal(object):
     chatty = 0
 
@@ -119,10 +118,10 @@ class Marshal9P(Marshal):
         self.enc4(q.vers)
         self.enc8(q.path)
     def decQ(self):
-        return Qid(self.dec1(), self.dec4(), self.dec8())
+        return py9p.Qid(self.dec1(), self.dec4(), self.dec8())
 
     def _checkType(self, t):
-        if not cmdName.has_key(t):
+        if not py9p.cmdName.has_key(t):
             raise Error("Invalid message type %d" % t)
     def _checkResid(self):
         if len(self.bytes):
@@ -133,7 +132,7 @@ class Marshal9P(Marshal):
         self.setBuf()
         self._checkType(fcall.type)
         if self.chatty:
-            print "-%d->" % fd.fileno(), cmdName[fcall.type], fcall.tag, fcall.tostr()
+            print "-%d->" % fd.fileno(), py9p.cmdName[fcall.type], fcall.tag, fcall.tostr()
         self.enc1(fcall.type)
         self.enc2(fcall.tag)
         self.enc(fcall)
@@ -150,11 +149,11 @@ class Marshal9P(Marshal):
         self.setBuf(fd.read(size - 4))
         type,tag = self.dec1(),self.dec2()
         self._checkType(type)
-        fcall = Fcall(type, tag)
+        fcall = py9p.Fcall(type, tag)
         self.dec(fcall)
         self._checkResid()
         if self.chatty:
-            print "<-%d-" % fd.fileno(), cmdName[type], tag, fcall.tostr()
+            print "<-%d-" % fd.fileno(), py9p.cmdName[type], tag, fcall.tostr()
         return fcall
 
     def encstat(self, fcall):
@@ -189,66 +188,66 @@ class Marshal9P(Marshal):
                 self.encS(x.muidnum)
 
     def enc(self, fcall):
-        if fcall.type in (Tversion, Rversion):
+        if fcall.type in (py9p.Tversion, py9p.Rversion):
             self.enc4(fcall.msize)
             self.encS(fcall.version)
-        elif fcall.type == Tauth:
+        elif fcall.type == py9p.Tauth:
             self.enc4(fcall.afid)
             self.encS(fcall.uname)
             self.encS(fcall.aname)
-        elif fcall.type == Rauth:
+        elif fcall.type == py9p.Rauth:
             self.encQ(fcall.aqid)
-        elif fcall.type == Rerror:
+        elif fcall.type == py9p.Rerror:
             self.encS(fcall.ename)
-        elif fcall.type == Tflush:
+        elif fcall.type == py9p.Tflush:
             self.enc2(fcall.oldtag)
-        elif fcall.type == Tattach:
+        elif fcall.type == py9p.Tattach:
             self.enc4(fcall.fid)
             self.enc4(fcall.afid)
             self.encS(fcall.uname)
             self.encS(fcall.aname)
-        elif fcall.type == Rattach:
+        elif fcall.type == py9p.Rattach:
             self.encQ(fcall.afid)
-        elif fcall.type == Twalk:
+        elif fcall.type == py9p.Twalk:
             self.enc4(fcall.fid)
             self.enc4(fcall.newfid)
             self.enc2(len(fcall.wname))
             for x in fcall.wname:
                 self.encS(x)
-        elif fcall.type == Rwalk:
+        elif fcall.type == py9p.Rwalk:
             self.enc2(len(fcall.wqid))
             for x in fcall.wqid:
                 self.encQ(x)
-        elif fcall.type == Topen:
+        elif fcall.type == py9p.Topen:
             self.enc4(fcall.fid)
             self.enc1(fcall.mode)
-        elif fcall.type in (Ropen, Rcreate):
+        elif fcall.type in (py9p.Ropen, py9p.Rcreate):
             self.encQ(fcall.qid)
             self.enc4(fcall.iounit)
-        elif fcall.type == Tcreate:
+        elif fcall.type == py9p.Tcreate:
             self.enc4(fcall.fid)
             self.encS(fcall.name)
             self.enc4(fcall.perm)
             self.enc1(fcall.mode)
             if self.dotu:
                 self.encS(fcall.extension)
-        elif fcall.type == Tread:
+        elif fcall.type == py9p.Tread:
             self.enc4(fcall.fid)
             self.enc8(fcall.offset)
             self.enc4(fcall.count)
-        elif fcall.type == Rread:
+        elif fcall.type == py9p.Rread:
             self.encD(fcall.data)
-        elif fcall.type == Twrite:
+        elif fcall.type == py9p.Twrite:
             self.enc4(fcall.fid)
             self.enc8(fcall.offset)
             self.enc4(len(fcall.data))
             self.encX(fcall.data)
-        elif fcall.type == Rwrite:
+        elif fcall.type == py9p.Rwrite:
             self.enc4(fcall.count)
-        elif fcall.type in (Tclunk,  Tremove, Tstat):
+        elif fcall.type in (py9p.Tclunk,  py9p.Tremove, py9p.Tstat):
             self.enc4(fcall.fid)
-        elif fcall.type in (Rstat, Twstat):
-            if fcall.type == Twstat:
+        elif fcall.type in (py9p.Rstat, py9p.Twstat):
+            if fcall.type == py9p.Twstat:
                 self.dec4(fcall.fid)
             self.encstat(fcall)
 
@@ -262,7 +261,7 @@ class Marshal9P(Marshal):
             b = self.bytes
             self.bytes = b[0:size]
 
-            stat = Dir(self.dotu)
+            stat = py9p.Dir(self.dotu)
             stat.type = self.dec2()     # type
             stat.dev = self.dec4()      # dev
             stat.qid = self.decQ()      # qid
@@ -284,66 +283,65 @@ class Marshal9P(Marshal):
 
 
     def dec(self, fcall):
-        if fcall.type in (Tversion, Rversion):
+        if fcall.type in (py9p.Tversion, py9p.Rversion):
             fcall.msize = self.dec4()
             fcall.version = self.decS()
-        elif fcall.type == Tauth:
+        elif fcall.type == py9p.Tauth:
             fcall.afid = self.dec4()
             fcall.uname = self.decS()
             fcall.aname = self.decS()
-        elif fcall.type == Rauth:
+        elif fcall.type == py9p.Rauth:
             fcall.aqid = self.decQ()
-        elif fcall.type == Rerror:
+        elif fcall.type == py9p.Rerror:
             fcall.ename = self.decS()
-        elif fcall.type == Tflush:
+        elif fcall.type == py9p.Tflush:
             fcall.oldtag = self.dec2()
-        elif fcall.type == Tattach:
+        elif fcall.type == py9p.Tattach:
             fcall.fid = self.dec4()
             fcall.afid = self.dec4()
             fcall.uname = self.decS()
             fcall.aname = self.decS()
-        elif fcall.type == Rattach:
+        elif fcall.type == py9p.Rattach:
             fcall.afid = self.decQ()
-        elif fcall.type == Twalk:
+        elif fcall.type == py9p.Twalk:
             fcall.fid = self.dec4()
             fcall.newfid = self.dec4()
             l = self.dec2()
             fcall.wname = [self.decS() for n in xrange(l)]
-        elif fcall.type == Rwalk:
+        elif fcall.type == py9p.Rwalk:
             l = self.dec2()
             fcall.wqid = [self.decQ() for n in xrange(l)]
-        elif fcall.type == Topen:
+        elif fcall.type == py9p.Topen:
             fcall.fid = self.dec4()
             fcall.mode = self.dec1()
-        elif fcall.type in (Ropen, Rcreate):
+        elif fcall.type in (py9p.Ropen, py9p.Rcreate):
             fcall.qid = self.decQ()
             fcall.iounit = self.dec4()
-        elif fcall.type == Tcreate:
+        elif fcall.type == py9p.Tcreate:
             fcall.fid = self.dec4()
             fcall.name = self.decS()
             fcall.perm = self.dec4()
             fcall.mode = self.dec1()
             if self.dotu:
                 fcall.extension = self.decS()
-        elif fcall.type == Tread:
+        elif fcall.type == py9p.Tread:
             fcall.fid = self.dec4()
             fcall.offset = self.dec8()
             fcall.count = self.dec4()
-        elif fcall.type == Rread:
+        elif fcall.type == py9p.Rread:
             fcall.data = self.decD()
-        elif fcall.type == Twrite:
+        elif fcall.type == py9p.Twrite:
             fcall.fid = self.dec4()
             fcall.offset = self.dec8()
             fcall.count = self.dec4()
             fcall.data = self.decX(fcall.count)
-        elif fcall.type == Rwrite:
+        elif fcall.type == py9p.Rwrite:
             fcall.count = self.dec4()
-        elif fcall.type in (Tclunk, Tremove, Tstat):
+        elif fcall.type in (py9p.Tclunk, py9p.Tremove, py9p.Tstat):
             fcall.fid = self.dec4()
-        elif fcall.type in (Rstat, Twstat):
-            if fcall.type == Twstat:
+        elif fcall.type in (py9p.Rstat, py9p.Twstat):
+            if fcall.type == py9p.Twstat:
                 fcall.fid = self.dec4()
             self.decstat(fcall)
 
         return fcall
- 

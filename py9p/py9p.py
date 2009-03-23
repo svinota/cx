@@ -188,6 +188,7 @@ class Fcall:
 
         ret = ' '.join(map(lambda x: "%s=%s" % (x, getattr(self, x)), attr))
         ret = cmdName[self.type] + " " + ret
+
         return repr(ret)
 
 
@@ -327,14 +328,14 @@ class Server(object):
     def __init__(self, listen, authmode=None, fs=None, user=None, dom=None, key=None, chatty=False, dotu=False):
         if authmode == None:
             self.authfs = None
-		elif authmode == 'pki':
-            import py9psk1
+        elif authmode == 'pki':
+            import py9p.pki
+            self.authfs = py9psk1.AuthFs(user)
+        elif authmode == 'sk1':
+            import py9p.sk1
             self.authfs = py9psk1.AuthFs(user, dom, key)
-        elif authmode == sk1:
-            import py9psk1
-            self.authfs = py9psk1.AuthFs(user, dom, key)
-		else:
-			raise ServerError("unsupported auth mode")
+        else:
+            raise ServerError("unsupported auth mode")
 
         self.fs = fs
         self.dotu = dotu
@@ -724,11 +725,12 @@ class Server(object):
         if req.fid.qid.type & QTDIR:
             data = []
             for x in req.ofcall.stat:
-                data = data + x.todata()
-            if req.ifcall.offset > len(data):
-                data = []
-            else:
-                req.ofcall.data = data[req.ifcall.offset:req.ifcall.offset + req.ifcall.count]
+                ndata = x.todata()
+                if (len(data)-req.ifcall.offset) + len(ndata) < req.ifcall.count:
+                    data = data + ndata
+                else:
+                    break
+            req.ofcall.data = data[req.ifcall.offset:]
             req.fid.diroffset = req.ifcall.offset + len(req.ofcall.data)
 
     def twrite(self, req):
@@ -826,7 +828,8 @@ class Client(object):
     msg = None
     msize = 8192 + IOHDRSZ
 
-    def __init__(self, fd, user, passwd, authsrv, chatty=0):
+    def __init__(self, fd, authmode=None, user=None, passwd=None, authsrv=None, chatty=0):
+        self.authmode = authmode
         self.msg = Marshal9P(dotu=0, chatty=chatty)
         self.fd = fd
         self.chatty = chatty
@@ -932,14 +935,22 @@ class Client(object):
 
         if fcall.afid != NOFID:
             fcall.aqid = rfcall.aqid
-            if passwd is None:
-                raise ClientError("Password required")
 
-            import py9psk1, socket
-            try:
-                py9psk1.clientAuth(self, fcall, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
-            except socket.error,e:
-                raise ClientError("%s: %s" % (authsrv, e.args[1]))
+            if self.authmode == None:
+                raise ClientError('no authentication method')
+            elif self.authmode == 'sk1':
+                if passwd is None:
+                    raise ClientError("Password required")
+                import py9psk1, socket
+                try:
+                    py9p.sk1.clientAuth(self, fcall, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
+                except socket.error,e:
+                    raise ClientError("%s: %s" % (authsrv, e.args[1]))
+            elif self.authmode == 'pki':
+                py9p.pki.clientAuth(self, fcall.afid, user)
+            else:
+                raise ClientError('unknown authentication method: %s'%self.authmode)
+                
         self._attach(self.ROOT, fcall.afid, user, "")
         if fcall.afid != NOFID:
             self._clunk(fcall.afid)

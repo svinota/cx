@@ -8,7 +8,6 @@ import copy
 import time
 
 import py9p
-import py9psk1
 
 def _os(func, *args):
     try:
@@ -253,7 +252,7 @@ class LocalFs(object):
         srv.respond(req, None)
 
 def usage(prog):
-    print "usage:  %s [-dD] [-p port] [-r root] [-l listen] -n|srvuser domain" % prog
+    print "usage:  %s [-dD] [-p port] [-r root] [-l listen] [-a authmode] [srvuser domain]" % prog
     sys.exit(1)
 
 def main():
@@ -271,9 +270,10 @@ def main():
     chatty = 0
     cancreate = 0
     dotu = 0
+    authmode = None
 
     try:
-        opt,args = getopt.getopt(args, "dDncp:r:l:")
+        opt,args = getopt.getopt(args, "dDcp:r:l:a:")
     except:
         usage(prog)
     for opt,optarg in opt:
@@ -291,21 +291,30 @@ def main():
             port = int(optarg)
         if opt == '-l':
             listen = optarg
+        if opt == '-a':
+            authmode = optarg
 
-    if(noauth):
+    if(authmode == None or authmode == 'none'):
+        authmode == None
         user = None
         dom = None
         passwd = None
         key = None
-    elif len(args) != 2:
-        usage(prog)
+    elif authmode == 'sk1':
+        if len(args) != 2:
+            usage(prog)
+        else:
+            user = args[0]
+            dom = args[1]
+            passwd = getpass.getpass()
+            key = py9p.sk1.makeKey(passwd)
+    elif authmode == 'pki':
+        user = 'admin'
     else:
-        user = args[0]
-        dom = args[1]
-        passwd = getpass.getpass()
-        key = py9psk1.makeKey(passwd)
+        print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
+        sys.exit(1)
 
-    srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=chatty)
+    srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=chatty)
     srv.mount(LocalFs(root, cancreate, dotu))
     srv.serve()
 
