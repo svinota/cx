@@ -6,6 +6,9 @@ import os
 import copy
 import py9p
 
+import getopt
+import getpass
+
 class SampleFs(py9p.Server):
     """
     A sample plugin filesystem.
@@ -104,7 +107,7 @@ class SampleFs(py9p.Server):
         srv.respond(req, None)
 
 def usage(argv0):
-    print "usage:  %s [-D] [-p port] [-u user] [-d domain] [-a authmode] [srvuser domain]" % argv0
+    print "usage:  %s [-dD] [-p port] [-l listen] [-a authmode] [srvuser domain]" % argv0
     sys.exit(1)
 
 def main(prog, *args):
@@ -115,36 +118,30 @@ def main(prog, *args):
     dbg = False
     user = None
     dom = None
+    passwd = None
     authmode = None
+    key = None
+    dotu = 0
 
     try:
-        opt,args = getopt.getopt(args, "Dnp:l:u:d:a:")
+        opt,args = getopt.getopt(args, "dDp:l:a:")
     except Exception, msg:
         usage(prog)
     for opt,optarg in opt:
+        if opt == '-d':
+            dotu = optarg
         if opt == "-D":
             dbg = True
         if opt == "-p":
             port = int(optarg)
         if opt == '-l':
             listen = optarg
-        if opt == '-n':
-            noauth = 1
-        if opt == '-u':
-            user = optarg
-        if opt == '-d':
-            dom = optarg
         if opt == '-a':
             authmode = optarg
 
-    if(authmode == None or authmode == 'none'):
-        authmode == None
-        user = None
-        dom = None
-        passwd = None
-        key = None
-    elif authmode == 'sk1':
+    if authmode == 'sk1':
         if len(args) != 2:
+            print >>sys.stderr, 'missing user and authsrv'
             usage(prog)
         else:
             user = args[0]
@@ -153,23 +150,15 @@ def main(prog, *args):
             key = py9p.sk1.makeKey(passwd)
     elif authmode == 'pki':
         user = 'admin'
-    else:
+    elif authmode != None:
         print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
         sys.exit(1)
 
-    srv = py9p.Server(listen=(listen, port), user=user, dom=dom, key=key, chatty=dbg)
+    srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=dbg)
     srv.mount(SampleFs())
 
-    for m in mods:
-        if os.path.dirname(m) != '':
-            sys.path.append(os.path.dirname(m))
-            m = os.path.basename(m)
-        m = m.rstrip('.py')
-        x = __import__(m)
-        srv.mount(x)
-        print '%s loaded.' % m
-
-    print 'listening on %s:%d...' % (listen, port)
+    if dbg:
+        print 'listening on %s:%d...' % (listen, port)
     srv.serve()
 
 

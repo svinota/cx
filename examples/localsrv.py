@@ -254,7 +254,7 @@ class LocalFs(object):
         srv.respond(req, None)
 
 def usage(prog):
-    print "usage:  %s [-dD] [-p port] [-r root] [-l listen] [-a authmode] [srvuser domain]" % prog
+    print "usage:  %s [-dcD] [-p port] [-r root] [-l listen] [-a authmode] [srvuser domain]" % prog
     sys.exit(1)
 
 def main():
@@ -290,8 +290,6 @@ def main():
             cancreate = 1
         if opt == '-r':
             root = optarg
-        if opt == "-n":
-            noauth = 1
         if opt == "-p":
             port = int(optarg)
         if opt == '-l':
@@ -301,6 +299,7 @@ def main():
 
     if authmode == 'sk1':
         if len(args) != 2:
+            print >>sys.stderr, 'missing user and authsrv'
             usage(prog)
         else:
             user = args[0]

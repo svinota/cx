@@ -193,7 +193,10 @@ def getprivkey(uname, priv=None, passphrase=None):
         raise AuthError("no uname")
 
     if priv == None:
-        f = gethome(uname) + '/.ssh/id_rsa'
+        f = gethome(uname)
+        if not f:
+            raise KeyError("no home dir for user %s"%uname)
+        f += '/.ssh/id_rsa'
         if not os.path.exists(f):
             raise KeyError("no private key and no " + f)
         else:
@@ -230,9 +233,12 @@ class AuthFs(object):
         if uname in self.pubkeys:
             pubkey = self.pubkeys[uname]
         elif pub == None:
-            f = gethome(uname) + '/.ssh/id_rsa.pub'
+            f = gethome(uname)
+            if not f:
+                raise KeyError("no home for user %s"%uname)
+            f += '/.ssh/id_rsa.pub'
             if not os.path.exists(f):
-                raise KeyError("no public key and no "+f)
+                raise KeyError("no public key supplied and no "+f)
             else:
                 pubkey = file(f).read()
         elif not os.path.exists(pub):
