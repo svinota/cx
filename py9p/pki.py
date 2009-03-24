@@ -206,22 +206,6 @@ def getprivkey(uname, priv=None, passphrase=None):
     return strtoprivkey(privkey, passphrase)
 
 
-def getpubkey(uname, pub=None):
-    if not uname:
-        raise AuthError('no uname')
-    if pub == None:
-        f = gethome(uname) + '/.ssh/id_rsa.pub'
-        if not os.path.exists(f):
-            raise KeyError("no public key and no "+f)
-        else:
-            pubkey = file(f).read()
-    elif not os.path.exists(pub):
-        raise KeyError("file not found: " + pub)
-    else:
-        pubkey = file(pub).read()
-
-    return strtopubkey(pubkey)
-
 def getchallenge():
     # generate a 16-byte long random string.  (note that the built-
     # in pseudo-random generator uses a 24-bit seed, so this is not
@@ -237,79 +221,86 @@ class AuthFs(object):
     type = ord('a')
     HaveChal,NeedSign,Success = range(3)
     cancreate = 0
-    def __init__(self, uname):
-        self.uname = uname
+    def __init__(self):
+        self.pubkeys = {}
 
-    def estab(self, f, isroot):
-        f.isdir = 0
-        f.odev = self
-        f.suid = None
-        f.phase = self.HaveChal
-        if not hasattr(self, 'uname'):
-            raise AuthError("no self.uname")
-        f.key = getpubkey(self.uname)
-        f.chal = getchallenge()
+    def getpubkey(self, uname, pub=None):
+        if not uname:
+            raise AuthError('no uname')
+        if uname in self.pubkeys:
+            pubkey = self.pubkeys[uname]
+        elif pub == None:
+            f = gethome(uname) + '/.ssh/id_rsa.pub'
+            if not os.path.exists(f):
+                raise KeyError("no public key and no "+f)
+            else:
+                pubkey = file(f).read()
+        elif not os.path.exists(pub):
+            raise KeyError("file not found: " + pub)
+        else:
+            pubkey = file(pub).read()
 
-    def _invalid(self, *args):
-        raise py9p.ServerError("bad operation")
-    walk = _invalid
-    remove = _invalid
-    create = _invalid
-    open = _invalid
+        return strtopubkey(pubkey)
 
-    def exists(self, f):
-        return 1
-    def clunk(self, f):
-        pass
 
-    def read(self, f, pos, len):
+    def estab(self, fid):
+        fid.suid = None
+        fid.phase = self.HaveChal
+        if not hasattr(fid, 'uname'):
+            raise AuthError("no fid.uname")
+        fid.key = self.getpubkey(fid.uname)
+        fid.chal = getchallenge()
+
+    def read(self, srv, req):
+        f = req.fid
+        pos = req.ifcall.offset
+        len = req.ifcall.count
         if f.phase == self.HaveChal:
             f.phase = self.NeedSign
-            print 'auth: chal:', f.chal
-            print 'auth: encrypted:', f.key.encrypt(f.chal, '')
-            return pickle.dumps(f.key.encrypt(f.chal, ''))
+            req.ofcall.data = pickle.dumps(f.key.encrypt(f.chal, ''))
+            srv.respond(req, None)
+            return
         elif f.phase == self.Success:
-            return 'success as ' + f.suid
+            req.ofcall.data = 'success as ' + f.suid
+            srv.respond(req, None)
+            return
         raise py9p.ServerError("unexpected phase")
 
-    def write(self, f, pos, buf):
+    def write(self, srv, req):
+        f = req.fid
+        pos = req.ifcall.offset
+        buf = req.ifcall.data
         if f.phase == self.NeedSign:
-            print 'auth: sign:', buf
             signature = pickle.loads(buf)
-            print "here's what we have to verify:", str(signature)
             if f.key.verify(f.chal, signature):
                 f.phase = self.Success
-                f.suid = self.uname
-                return len(buf)
+                f.suid = f.uname
+                req.ofcall.count = len(buf)
+                srv.respond(req, None)
+                return
             else:
                 raise py9p.ServerError('signature not verified')
         raise py9p.ServerError("unexpected phase")
 
-def clientAuth(cl, afid, uname):
+def clientAuth(cl, fcall, uname):
     pos = [0]
     def rd(l):
-        x = cl._read(afid, pos[0], l)
-        pos[0] += len(x)
-        return x
+        fc = cl._read(fcall.afid, pos[0], l)
+        pos[0] += len(fc.data)
+        return fc.data
     def wr(x):
-        l = cl._write(afid, pos[0], x)
-        pos[0] += l
-        return l
+        fc = cl._write(fcall.afid, pos[0], x)
+        pos[0] += fc.count
+        return fc.count
 
     # XXX here we would have to ask for privkey password 
     key = getprivkey(uname)
     c = pickle.loads(rd(2048))
-    print "auth: read challenge: %s"%str(c)
     chal = key.decrypt(c)
-    print "auth: decrypted challenge: %s"%chal
     sign = key.sign(chal, '')
-    print "auth: signed:", sign[0]
-    print 'auth:' + str(sign)
 
     wr(pickle.dumps(sign))
     res = rd(2048)
-    print "auth: response: %s"%res
-
     return
 
 

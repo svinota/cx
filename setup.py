@@ -15,6 +15,6 @@ setup(name='py9p',
         'examples/cl.py',
         'examples/localsrv.py',
         'examples/simplesrv.py',
-        ],
+    ],
       
 )

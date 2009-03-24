@@ -9,9 +9,9 @@ from py9p import *
 __all__ = []
 for subpackage in [
     'py9p',
-    'marshal',
-    'sk1',
-    'pki',
+	'pki',
+	'sk1',
+	'marshal'
     ]:
     try:
         exec 'import ' + subpackage

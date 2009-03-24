@@ -8,6 +8,8 @@ import copy
 import time
 
 import py9p
+import py9p.pki
+import py9p.sk1
 
 def _os(func, *args):
     try:
@@ -271,6 +273,9 @@ def main():
     cancreate = 0
     dotu = 0
     authmode = None
+    dom = None
+    passwd = None
+    key = None
 
     try:
         opt,args = getopt.getopt(args, "dDcp:r:l:a:")
@@ -294,13 +299,7 @@ def main():
         if opt == '-a':
             authmode = optarg
 
-    if(authmode == None or authmode == 'none'):
-        authmode == None
-        user = None
-        dom = None
-        passwd = None
-        key = None
-    elif authmode == 'sk1':
+    if authmode == 'sk1':
         if len(args) != 2:
             usage(prog)
         else:
@@ -310,7 +309,7 @@ def main():
             key = py9p.sk1.makeKey(passwd)
     elif authmode == 'pki':
         user = 'admin'
-    else:
+    elif authmode != None:
         print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
         sys.exit(1)
 

@@ -9,6 +9,8 @@ import readline
 import atexit
 
 import py9p
+import py9p.pki
+import py9p.sk1
 
 class Error(py9p.Error): pass
 
@@ -255,7 +257,7 @@ class CmdClient(py9p.Client):
                 break
 
 def usage(prog):
-    print "usage: %s [-d] [-m authmode] [-a authsrv] [user@]srv[:port] [cmd ...]" % prog
+    print "usage: %s [-d] [-m authmode] [-a authsrv] [-k privkey] [user@]srv[:port] [cmd ...]" % prog
     sys.exit(1)
     
 def main():
@@ -269,7 +271,7 @@ def main():
     if os.environ.has_key('USER'):
         user = os.environ['USER']
     try:
-        opt,args = getopt.getopt(args, "da:u:p:")
+        opt,args = getopt.getopt(args, "da:u:p:m:k:")
     except:
         usage(prog)
     passwd = None
@@ -285,6 +287,8 @@ def main():
             port = int(optarg)        # XXX catch
         if opt == '-u':
             user = optarg
+        if opt == '-k':
+            privkey = optarg
     
     if len(args) < 1:
         print >>sys.stderr, "error: no server to connect to..."
@@ -306,7 +310,7 @@ def main():
     if chatty:
         print "connecting as %s to %s, port %d" % (user, srv, port)
 
-    if authmode == 'pki' and authsrv is None:
+    if authmode == 'sk1' and authsrv is None:
         print >>sys.stderr, "assuming %s is also auth server" % srv
         authsrv = srv
 
@@ -319,7 +323,7 @@ def main():
         print "%s: %s" % (srv, e.args[1])
         return
 
-    if authmode == 'pki' and passwd is not None:
+    if authmode == 'sk1' and passwd is None:
         passwd = getpass.getpass()
     try:
         cl = CmdClient(py9p.Sock(sock), authmode, user, passwd, authsrv, chatty)

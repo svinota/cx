@@ -329,15 +329,16 @@ class Server(object):
         if authmode == None:
             self.authfs = None
         elif authmode == 'pki':
-            import py9p.pki
-            self.authfs = py9psk1.AuthFs(user)
+            import pki
+            self.authfs = pki.AuthFs()
         elif authmode == 'sk1':
-            import py9p.sk1
-            self.authfs = py9psk1.AuthFs(user, dom, key)
+            import sk1
+            self.authfs = sk1.AuthFs(user, dom, key)
         else:
             raise ServerError("unsupported auth mode")
 
         self.fs = fs
+        self.authmode = authmode
         self.dotu = dotu
 
         self.readpool = []
@@ -516,6 +517,8 @@ class Server(object):
         req.afid = Fid(req.sock.fids, req.ifcall.afid, auth=1)
         if not req.afid:
             self.respond(req, Edupfid)
+            return
+        req.afid.uname = req.ifcall.uname
         self.authfs.estab(req.afid)
         req.afid.qid = Qid(QTAUTH, 0, hash8('#a'))
         req.ofcall.aqid = req.afid.qid
@@ -542,6 +545,8 @@ class Server(object):
                 return
             elif self.chatty:
                 print >>sys.stderr, "authenticated as %r"%req.ifcall.uname
+        elif self.authmode != None:
+            self.respond(req, 'authentication not complete')
 
         req.fid.uid = req.ifcall.uname
         req.sock.uname = req.ifcall.uname # now we know who we are
@@ -939,15 +944,16 @@ class Client(object):
             if self.authmode == None:
                 raise ClientError('no authentication method')
             elif self.authmode == 'sk1':
+                import sk1
                 if passwd is None:
                     raise ClientError("Password required")
-                import py9psk1, socket
                 try:
-                    py9p.sk1.clientAuth(self, fcall, user, py9psk1.makeKey(passwd), authsrv, py9psk1.AUTHPORT)
+                    sk1.clientAuth(self, fcall, user, sk1.makeKey(passwd), authsrv, sk1.AUTHPORT)
                 except socket.error,e:
                     raise ClientError("%s: %s" % (authsrv, e.args[1]))
             elif self.authmode == 'pki':
-                py9p.pki.clientAuth(self, fcall.afid, user)
+                import pki
+                pki.clientAuth(self, fcall, user)
             else:
                 raise ClientError('unknown authentication method: %s'%self.authmode)
                 
