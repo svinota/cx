@@ -105,16 +105,16 @@ def hash8(obj):
     return int(abs(hash(obj)))
 
 def hasperm(f, uid, p):
-    m = f.dir.mode & 7  # other
+    m = f.mode & 7  # other
     if (p & m) == p:
         return 1
 
-    if f.dir.uid == uid:
-        m |= (f.dir.mode>>6) & 7
+    if f.uid == uid:
+        m |= (f.mode>>6) & 7
         if (p & m) == p:
             return 1
-    if f.dir.gid == uid:
-        m |= (f.dir.mode>>3) & 7
+    if f.gid == uid:
+        m |= (f.mode>>3) & 7
         if (p & m) == p:
             return 1
     return 0
@@ -542,8 +542,8 @@ class Server(object):
         if hasattr(self.fs, 'attach'):
             self.fs.attach()
         else:
-            req.ofcall.afid = self.fs.root.dir.qid
-            req.fid.qid = self.fs.root.dir.qid
+            req.ofcall.afid = self.fs.root.qid
+            req.fid.qid = self.fs.root.qid
             self.respond(req, None)
         return
 
@@ -594,10 +594,6 @@ class Server(object):
             req.fid.ref = req.fid.ref+1
             req.newfid = req.fid
 
-#        if len(req.ifcall.wname) == 0 and self.fs.root:
-#            req.ofcall.wqid.append(self.fs.root.dir.qid)
-#            req.newfid.qid = self.fs.root.dir.qid
-#            self.respond(req, None)
         if len(req.ifcall.wname) == 0:
             req.ofcall.wqid.append(req.fid.qid)
             self.respond(req, None)

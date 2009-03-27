@@ -19,6 +19,7 @@ class SampleFs(py9p.Server):
     def __init__(self):
         self.start = int(time.time())
         rootdir = py9p.Dir(0)    # not dotu
+        rootdir.children = []
         rootdir.type = 0
         rootdir.dev = 0
         rootdir.mode = 0755
@@ -43,14 +44,9 @@ class SampleFs(py9p.Server):
         f.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
         self.root.children.append(f)
 
-        # an empty dir in '/'
-        dir = copy.copy(rootdir)
-        dir.name = 'dir'
-        dir.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
-
-        self.files[self.root.dir.qid.path] = self.root
+        self.files[self.root.qid.path] = self.root
         for x in self.root.children:
-            self.files[x.dir.qid.path] = x
+            self.files[x.qid.path] = x
 
     def open(self, srv, req):
         '''If we have a file tree then simply check whether the Qid matches
@@ -58,7 +54,7 @@ class SampleFs(py9p.Server):
         if not self.files.has_key(req.fid.qid.path):
             srv.respond(req, "unknown file")
         f = self.files[req.fid.qid.path]
-        if (req.ifcall.mode & f.dir.mode) != py9p.OREAD :
+        if (req.ifcall.mode & f.mode) != py9p.OREAD :
             raise py9p.ServerError("permission denied")
         srv.respond(req, None)
 
@@ -73,15 +69,15 @@ class SampleFs(py9p.Server):
             return
 
         if req.ifcall.wname[0] == '..':
-            req.ofcall.wqid.append(f.parent.dir.qid)
+            req.ofcall.wqid.append(f.parent.qid)
             srv.respond(req, None)
             return
 
-        newd = f.findchild(req.ifcall.wname[0])
-        if newd:
-            req.ofcall.wqid.append(newd.dir.qid)
-            srv.respond(req, None)
-            return
+        for x in f.children:
+            if req.ifcall.wname[0] == x.name:
+                req.ofcall.wqid.append(x.qid)
+                srv.respond(req, None)
+                return
 
         srv.respond(req, "can't find %s"%req.ifcall.wname[0])
         return
@@ -91,14 +87,14 @@ class SampleFs(py9p.Server):
             raise py9p.ServError("unknown file")
 
         f = self.files[req.fid.qid.path]
-        if f.dir.qid.type & py9p.QTDIR:
+        if f.qid.type & py9p.QTDIR:
             req.ofcall.stat = []
             for x in f.children:
-                req.ofcall.stat.append(x.dir)
-        elif f.dir.name == 'sample1':
+                req.ofcall.stat.append(x)
+        elif f.name == 'sample1':
             buf = '%d\n' % time.time()
             req.ofcall.data = buf[:req.ifcall.count]
-        elif f.dir.name == 'sample2' :
+        elif f.name == 'sample2' :
             buf = 'The time is now %s. thank you for asking.\n' % time.asctime(time.localtime(time.time()))
             if req.ifcall.offset > len(buf):
                 req.ofcall.data = ''
@@ -157,9 +153,6 @@ def main(prog, *args):
 
     srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=dbg)
     srv.mount(SampleFs())
-
-    if dbg:
-        print 'listening on %s:%d...' % (listen, port)
     srv.serve()
 
 

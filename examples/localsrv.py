@@ -41,7 +41,7 @@ class LocalFs(object):
         self.root = self.pathtodir(root)
         self.root.parent = self.root
         self.root.localpath = root
-        self.files[self.root.dir.qid.path] = self.root
+        self.files[self.root.qid.path] = self.root
 
     def getfile(self, path):
         if not self.files.has_key(path):
@@ -122,10 +122,10 @@ class LocalFs(object):
                 print 'walk: from:', f.localpath, "now:", path, 'resulting:', npath
 
             if path == '.' or path == '':
-                req.ofcall.wqid.append(f.dir.qid)
+                req.ofcall.wqid.append(f.qid)
             elif path == '..':
                 # .. resolves to the parent, circular at /
-                qid = f.parent.dir.qid
+                qid = f.parent.qid
                 req.ofcall.wqid.append(qid)
                 f = f.parent
             else:
@@ -156,7 +156,7 @@ class LocalFs(object):
             srv.respond(req, "read-only file server")
             return
 
-        if f.dir.qid.type & py9p.QTDIR:
+        if f.qid.type & py9p.QTDIR:
             _os(os.rmdir, f.localpath)
         else:
             _os(os.remove, f.localpath)
@@ -179,10 +179,10 @@ class LocalFs(object):
         f = self.files[req.fid.qid.path]
         name = f.localpath+'/'+req.ifcall.name
         if req.ifcall.perm & py9p.DMDIR:
-            perm = req.ifcall.perm & (~0777 | (f.dir.mode & 0777))
+            perm = req.ifcall.perm & (~0777 | (f.mode & 0777))
             _os(os.mkdir, name, req.ifcall.perm & ~(py9p.DMDIR))
         else:
-            perm = req.ifcall.perm & (~0666 | (f.dir.mode & 0666))
+            perm = req.ifcall.perm & (~0666 | (f.mode & 0666))
             _os(file, name, "w+").close()
             _os(os.chmod, name, perm)
             if (req.ifcall.mode & 3) == py9p.OWRITE:
@@ -226,7 +226,7 @@ class LocalFs(object):
             srv.respond(req, "unknown file")
             return
 
-        if f.dir.qid.type & py9p.QTDIR:
+        if f.qid.type & py9p.QTDIR:
             # no need to add anything to self.files yet. wait until they walk to it
             l = os.listdir(f.localpath)
             l = filter(lambda x : x not in ('.','..'), l)
@@ -268,6 +268,7 @@ def main():
     listen = '0.0.0.0'
     root = '/tmp'
     mods = []
+    user = None
     noauth = 0
     chatty = 0
     cancreate = 0
