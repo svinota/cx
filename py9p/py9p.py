@@ -290,17 +290,6 @@ class Dir:
             n.encS(self.muidnum)
         return n.bytes
 
-class File:
-    def __init__(self, dir, parent=None):
-        self.dir = dir
-        self.children = []
-        self.parent = parent
-
-    def findchild(self, name):
-        for x in self.children:
-            if x.dir.name == name:
-                return x
-        return None 
 class Req:
     def __init__(self, tag, fd = None, ifcall=None, ofcall=None, dir=None, oldreq=None,
     fid=None, afid=None, newfid=None):

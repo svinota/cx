@@ -27,26 +27,27 @@ class SampleFs(py9p.Server):
         rootdir.name = '/'
         rootdir.uid = rootdir.gid = rootdir.muid = os.environ['USER']
         rootdir.qid = py9p.Qid(py9p.QTDIR, 0, py9p.hash8(rootdir.name))
-        self.root = py9p.File(rootdir, rootdir)    # / is its own parent, just so we don't fall off the edge of the earth
+        rootdir.parent = rootdir
+        self.root = rootdir    # / is its own parent, just so we don't fall off the edge of the earth
 
         # two files in '/'
         f = copy.copy(rootdir)
         f.name = 'sample1'
         f.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
         f.length = 1024
-        self.root.children.append(py9p.File(f, rootdir))
+        f.parent = rootdir
+        self.root.children.append(f)
         f = copy.copy(f)
         f.name = 'sample2'
         f.length = 8192
         f.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
-        self.root.children.append(py9p.File(f, rootdir))
+        self.root.children.append(f)
 
         # an empty dir in '/'
         dir = copy.copy(rootdir)
         dir.name = 'dir'
         dir.qid = py9p.Qid(0, 0, py9p.hash8(f.name))
 
-        # add everybody to the easy lookup table for Files
         self.files[self.root.dir.qid.path] = self.root
         for x in self.root.children:
             self.files[x.dir.qid.path] = x

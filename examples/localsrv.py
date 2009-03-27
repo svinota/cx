@@ -38,7 +38,7 @@ class LocalFs(object):
     def __init__(self, root, cancreate=0, dotu=0):
         self.dotu = dotu
         self.cancreate = cancreate 
-        self.root = py9p.File(self.pathtodir(root))
+        self.root = self.pathtodir(root)
         self.root.parent = self.root
         self.root.localpath = root
         self.files[self.root.dir.qid.path] = self.root
@@ -136,12 +136,11 @@ class LocalFs(object):
                     req.ofcall.wqid.append(d.qid)
                     f = nf
                 elif os.path.exists(npath):
-                    nf = py9p.File(d, f)
-                    nf.localpath = npath
-                    nf.parent = f
-                    self.files[d.qid.path] = nf
+                    d.localpath = npath
+                    d.parent = f
+                    self.files[d.qid.path] = d
                     req.ofcall.wqid.append(d.qid)
-                    f = nf
+                    f = d
                 else:
                     srv.respond(req, "can't find %s"%req.ifcall.wname[0])
                     return
@@ -201,7 +200,8 @@ class LocalFs(object):
             fd = _os(open, name, m)
 
         d = self.pathtodir(name)
-        self.files[d.qid.path] = py9p.File(d, f)
+        d.parent = f
+        self.files[d.qid.path] = d
         self.files[d.qid.path].localpath = name
         if fd:
             self.files[d.qid.path].fd = fd
