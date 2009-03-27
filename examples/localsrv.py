@@ -176,7 +176,6 @@ class LocalFs(object):
         if not f:
             srv.respond(req, 'unknown file')
             return
-        f = self.files[req.fid.qid.path]
         name = f.localpath+'/'+req.ifcall.name
         if req.ifcall.perm & py9p.DMDIR:
             perm = req.ifcall.perm & (~0777 | (f.mode & 0777))
