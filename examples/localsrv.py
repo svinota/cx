@@ -132,7 +132,7 @@ class LocalFs(object):
                 d = self.pathtodir(npath)
                 nf = self.getfile(d.qid)
                 if nf:
-                    # already here, just append
+                    # already exists, just append to req
                     req.ofcall.wqid.append(d.qid)
                     f = nf
                 elif os.path.exists(npath):

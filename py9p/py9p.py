@@ -660,9 +660,15 @@ class Server(object):
         if req.fid.omode != -1:
             self.respond(req, Ebotch)
             return
-        if (req.fid.qid.type & QTDIR) and ((req.ifcall.mode & (~ORCLOSE)) != OREAD):
-            self.respond(req, Eisdir)
-            return
+        if req.fid.qid.type & QTDIR:
+            if (req.ifcall.mode & (~ORCLOSE)) != OREAD:
+                self.respond(req, Eisdir)
+                return
+            # repeating the same bug as p9p?
+            if otoa(req.ifcall.mode) != AREAD: 
+                self.respond(req, Eisdir)
+                return
+
         req.ofcall.qid = req.fid.qid
         req.ofcall.iounit = self.msize - IOHDRSZ
         mode = req.ifcall.mode&3
