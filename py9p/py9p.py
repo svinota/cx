@@ -10,7 +10,10 @@ import select
 import copy
 import traceback
 
-from marshal import *
+from marshal9p import *
+
+IOHDRSZ = 24
+PORT = 564
 
 cmdName = {}
 def _enumCmd(*args):
@@ -49,6 +52,25 @@ Ewalknotdir = "walk in non-directory"
 NOTAG = 0xffff
 NOFID = 0xffffffffL
 
+# for completeness including all of p9p's defines
+OREAD   = 0   	#  open for read 
+OWRITE  = 1   	#  write 
+ORDWR   = 2   	#  read and write 
+OEXEC   = 3   	#  execute, == read but check execute permission 
+OTRUNC  = 16  	#  or'ed in (except for exec), truncate file first 
+OCEXEC  = 32  	#  or'ed in, close on exec 
+ORCLOSE = 64  	#  or'ed in, remove on close 
+ODIRECT = 128 	#  or'ed in, direct access 
+ONONBLOCK = 256   	#  or'ed in, non-blocking call 
+OEXCL   = 0x1000  	#  or'ed in, exclusive use (create only) 
+OLOCK   = 0x2000  	#  or'ed in, lock after opening 
+OAPPEND = 0x4000  	#  or'ed in, append only 
+
+AEXIST  = 0   	#  accessible: exists 
+AEXEC   = 1   	#  execute access 
+AWRITE  = 2   	#  write access 
+AREAD   = 4   	#  read access 
+
 # Qid.type
 QTDIR       =0x80        # type bit for directories 
 QTAPPEND    =0x40        # type bit for append only files 
@@ -77,13 +99,6 @@ DMREAD      =0x4     # mode bit for read permission
 DMWRITE     =0x2     # mode bit for write permission 
 DMEXEC      =0x1     # mode bit for execute permission 
 
-OREAD,OWRITE,ORDWR,OEXEC = range(4)
-AEXIST,AEXEC,AWRITE,AREAD = range(4)
-OTRUNC,ORCLOSE = 0x10,0x40
-
-IOHDRSZ = 24
-PORT = 564
-
 # supported authentication protocols
 auths = ['pki', 'sk1']
 
@@ -103,6 +118,26 @@ def modetostr(mode):
 
 def hash8(obj):
     return int(abs(hash(obj)))
+
+def otoa(p):
+    '''Convert from open() to access()-style args'''
+    ret = 0
+
+    np = p & 3
+    if np == OREAD:
+        ret = AREAD
+    elif np == OWRITE:
+        ret = AWRITE
+    elif np == ORDWR:
+        ret = AREAD|AWRITE
+    elif np == OEXEC:
+        ret = AEXEC
+
+    if(p&OTRUNC):
+        ret |= AWRITE
+
+    return ret
+
 
 def hasperm(f, uid, p):
     m = f.mode & 7  # other
