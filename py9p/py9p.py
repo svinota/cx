@@ -1092,10 +1092,6 @@ class Client(object):
                     ret.append(stat.tolstr())
                 else:
                     ret.append(stat.name)
-        #finally:
-        #    print 'YEEEEEEEEEEEEEEEHAAAAAAAAAAAAAAAAAAW'
-        #    self.close()
-        #    print 'YEEEEEEEEEEEEEEEHAAAAAAAAAAAAAAAAAAW'
         self.close()
         return ret
 
