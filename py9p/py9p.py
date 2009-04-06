@@ -1077,23 +1077,26 @@ class Client(object):
         ret = []
         if self.open() is None:
             return
-        try:
-            while 1:
-                buf = self.read(8192)
-                if len(buf) == 0:
-                    break
 
-                p9 = Marshal9P()
-                p9.setBuf(buf)
-                fcall = Fcall(Rstat)
-                p9.decstat(fcall, 0)
-                for stat in fcall.stat:
-                    if long:
-                        ret.append(stat.tolstr())
-                    else:
-                        ret.append(stat.name)
-        finally:
-            self.close()
+        while 1:
+            buf = self.read(8192)
+            if len(buf) == 0:
+                break
+
+            p9 = Marshal9P()
+            p9.setBuf(buf)
+            fcall = Fcall(Rstat)
+            p9.decstat(fcall, 0)
+            for stat in fcall.stat:
+                if long:
+                    ret.append(stat.tolstr())
+                else:
+                    ret.append(stat.name)
+        #finally:
+        #    print 'YEEEEEEEEEEEEEEEHAAAAAAAAAAAAAAAAAAW'
+        #    self.close()
+        #    print 'YEEEEEEEEEEEEEEEHAAAAAAAAAAAAAAAAAAW'
+        self.close()
         return ret
 
     def cd(self, pstr):
