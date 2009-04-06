@@ -1082,11 +1082,15 @@ class Client(object):
             buf = self.read(8192)
             if len(buf) == 0:
                 break
-
             p9 = Marshal9P()
             p9.setBuf(buf)
             fcall = Fcall(Rstat)
-            p9.decstat(fcall, 0)
+            try:
+                p9.decstat(fcall, 0)
+            except:
+                self.close()
+                print >>sys.stderr, 'unexpected decstat error:', traceback.print_exc()
+                raise
             for stat in fcall.stat:
                 if long:
                     ret.append(stat.tolstr())
