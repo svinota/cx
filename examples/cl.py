@@ -294,14 +294,14 @@ def main():
         print >>sys.stderr, "error: no server to connect to..."
         usage(prog)
 
-    srvkey = args[0].split('@', 2)
+    srvkey = args[0].split('@', 1)
     if len(srvkey) == 2:
         user = srvkey[0]
         srvkey = srvkey[1]
     else:
         srvkey = srvkey[0]
 
-    srvkey = srvkey.split(':', 2)
+    srvkey = srvkey.split(':', 1)
     if len(srvkey) == 2:
         port = int(srvkey[1])
     srvkey = srvkey[0]

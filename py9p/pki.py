@@ -228,9 +228,13 @@ class AuthFs(object):
     def __init__(self):
         self.pubkeys = {}
 
-    def addpubkey(self, uname, pub):
+    def addpubkeyfromfile(self, uname, pub):
         pubkey = file(pub).read()
         self.pubkeys[uname] = strtopubkey(pubkey)
+
+    def addpubkey(self, uname, pub):
+        self.pubkeys[uname] = strtopubkey(pub)
+
 
     def delpubkey(self, uname):
         if uname in self.pubkeys:
