@@ -224,14 +224,25 @@ class AuthFs(object):
     type = ord('a')
     HaveChal,NeedSign,Success = range(3)
     cancreate = 0
+    pubkeys = {}
     def __init__(self):
         self.pubkeys = {}
+
+    def addpubkey(self, uname, pub):
+        pubkey = file(pub).read()
+        self.pubkeys[uname] = strtopubkey(pubkey)
+
+    def delpubkey(self, uname):
+        if uname in self.pubkeys:
+            del self.pubkeys[uname]
+        else:
+            raise KeyError("no key for %s"%uname)
 
     def getpubkey(self, uname, pub=None):
         if not uname:
             raise AuthError('no uname')
         if uname in self.pubkeys:
-            pubkey = self.pubkeys[uname]
+            return self.pubkeys[uname]
         elif pub == None:
             f = gethome(uname)
             if not f:
@@ -246,7 +257,8 @@ class AuthFs(object):
         else:
             pubkey = file(pub).read()
 
-        return strtopubkey(pubkey)
+        self.pubkeys[uname] = strtopubkey(pubkey)
+        return self.pubkeys[uname]
 
 
     def estab(self, fid):
