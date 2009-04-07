@@ -859,12 +859,12 @@ class Client(object):
     msg = None
     msize = 8192 + IOHDRSZ
 
-    def __init__(self, fd, authmode=None, user=None, passwd=None, authsrv=None, chatty=0):
+    def __init__(self, fd, authmode=None, user=None, passwd=None, authsrv=None, chatty=0, key=None):
         self.authmode = authmode
         self.msg = Marshal9P(dotu=0, chatty=chatty)
         self.fd = fd
         self.chatty = chatty
-        self.login(user, passwd, authsrv)
+        self.login(user, passwd, authsrv, key)
 
     def _rpc(self, fcall):
         if fcall.type == Tversion:
@@ -953,7 +953,7 @@ class Client(object):
         self._clunk(self.CWD)
         self.fd.close()
 
-    def login(self, user, passwd, authsrv):
+    def login(self, user, passwd, authsrv, key=None):
         fcall = self._version(8 * 1024, version)
         if fcall.version != version:
             raise ClientError("version mismatch: %r" % req.version)
@@ -979,7 +979,7 @@ class Client(object):
                     raise ClientError("%s: %s" % (authsrv, e.args[1]))
             elif self.authmode == 'pki':
                 import pki
-                pki.clientAuth(self, fcall, user)
+                pki.clientAuth(self, fcall, user, key)
             else:
                 raise ClientError('unknown authentication method: %s'%self.authmode)
                 

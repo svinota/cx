@@ -300,7 +300,7 @@ class AuthFs(object):
                 raise py9p.ServerError('signature not verified')
         raise py9p.ServerError("unexpected phase")
 
-def clientAuth(cl, fcall, uname):
+def clientAuth(cl, fcall, uname, keyfile):
     pos = [0]
     def rd(l):
         fc = cl._read(fcall.afid, pos[0], l)
@@ -312,7 +312,7 @@ def clientAuth(cl, fcall, uname):
         return fc.count
 
     # XXX here we would have to ask for privkey password 
-    key = getprivkey(uname)
+    key = getprivkey(uname, keyfile)
     c = pickle.loads(rd(2048))
     chal = key.decrypt(c)
     sign = key.sign(chal, '')
