@@ -495,7 +495,7 @@ class Server(object):
                 return -1
             except Exception, e:
                 print >>sys.stderr, "unhandled exception: ", traceback.print_exc()
-                self.respond(req, 'unhandled internal exception: ' + e.args[0])
+                self.respond(req, 'unhandled internal exception: ' + traceback.print_exc())
                 return -1
         else:
             self.respond(req, "unhandled message: %s" % (cmdName[req.ifcall.type]))

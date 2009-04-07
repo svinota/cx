@@ -267,6 +267,7 @@ def main():
     authsrv = None
     chatty = 0
     authmode = 'none'
+    privkey = None
 
     if os.environ.has_key('USER'):
         user = os.environ['USER']
