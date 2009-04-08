@@ -221,7 +221,7 @@ class AuthFs(object):
     A special file for performing our pki authentication variant.  On completion
     of the protocol, suid is set to the authenticated username.
     """
-    type = ord('a')
+    type = 'pki'
     HaveChal,NeedSign,Success = range(3)
     cancreate = 0
     pubkeys = {}

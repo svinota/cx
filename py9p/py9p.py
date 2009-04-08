@@ -490,8 +490,12 @@ class Server(object):
             try:
                 func(req)
             except (ServerError, Error) ,e:
+                if self.chatty:
+                    print >>sys.stderr, traceback.print_exc()
                 self.respond(req, 'server error:' + str(e.args[0]))
             except Exception, e:
+                if self.chatty:
+                    print >>sys.stderr, traceback.print_exc()
                 self.respond(req, 'unhandled internal exception: ' + str(e.args[0]))
         else:
             self.respond(req, "unhandled message: %s" % (cmdName[req.ifcall.type]))
