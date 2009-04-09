@@ -592,7 +592,6 @@ class Server(object):
             req.sock.reqs = []
             self.respond(req, None)
         
-
     def rflush(self, req, error):
         if req.oldreq:
             if req.oldreq.responded == 0:

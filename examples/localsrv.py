@@ -52,6 +52,7 @@ class LocalFs(object):
         '''Stat-to-dir conversion'''
         s = _os(os.stat, f)
         u = uidname(s.st_uid)
+        g = gidname(s.st_gid)
         res = s.st_mode & 0777
         type = 0
         if stat.S_ISDIR(s.st_mode):
@@ -69,7 +70,7 @@ class LocalFs(object):
             return py9p.Dir(0, 0, s.st_dev, qid,
                 res,
                 int(s.st_atime), int(s.st_mtime),
-                s.st_size, os.path.basename(f), u, gidname(s.st_gid), u)
+                s.st_size, os.path.basename(f), u, g, u)
 
     def open(self, srv, req):
         f = self.getfile(req.fid.qid.path)
@@ -118,13 +119,13 @@ class LocalFs(object):
             if path == '.' or path == '':
                 req.ofcall.wqid.append(f.qid)
             elif path == '..':
-                # .. resolves to the parent, circular at /
+                # .. resolves to the parent, cycles at /
                 qid = f.parent.qid
                 req.ofcall.wqid.append(qid)
                 f = f.parent
             else:
                 d = self.pathtodir(npath)
-                nf = self.getfile(d.qid)
+                nf = self.getfile(d.qid.path)
                 if nf:
                     # already exists, just append to req
                     req.ofcall.wqid.append(d.qid)
