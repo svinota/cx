@@ -76,8 +76,6 @@ class LocalFs(object):
         if not f:
             srv.respond(req, "unknown file")
             return
-        d = self.pathtodir(f.localpath)
-
         if (req.ifcall.mode & 3) == py9p.OWRITE:
             if not self.cancreate:
                 srv.respond(req, "read-only file server")
@@ -96,13 +94,9 @@ class LocalFs(object):
                 m = "r+b"
         else:                # py9p.OREAD and otherwise
             m = "rb"
-
-        if d.qid.type & py9p.QTDIR:
-            # directories are handled at reading time
-            srv.respond(req, None)
-            return
-
-        f.fd = _os(file, f.localpath, m)
+        if not (f.qid.type & py9p.QTDIR):
+            print 'LOOOOOOOOOOOOOCAL:', f.localpath
+            f.fd = _os(file, f.localpath, m)
         srv.respond(req, None)
 
     def walk(self, srv, req):
@@ -142,7 +136,7 @@ class LocalFs(object):
                     req.ofcall.wqid.append(d.qid)
                     f = d
                 else:
-                    srv.respond(req, "can't find %s"%req.ifcall.wname[0])
+                    srv.respond(req, "can't find %s"%path)
                     return
 
         srv.respond(req, None)
