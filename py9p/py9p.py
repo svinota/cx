@@ -408,7 +408,7 @@ class Server(object):
                             func = getattr(self.fs, name)
                             func(req)
                         except:
-                            print >>sys.stderr, "error in delayed respond: ", traceback.print_exc()
+                            print >>sys.stderr, "error in delayed response: ", traceback.print_exc()
                             self.respond(req, "error in delayed response")
                             # what a mess! should we be doing this at all?
                             # how do we tell the fileserver that one of its
@@ -490,17 +490,16 @@ class Server(object):
             try:
                 func(req)
             except (ServerError, Error) ,e:
-                print >>sys.stderr, "error processing request: ", traceback.print_exc()
-                self.respond(req, str(e.args[0]))
-                return -1
+                if self.chatty:
+                    print >>sys.stderr, traceback.print_exc()
+                self.respond(req, 'server error:' + str(e.args[0]))
             except Exception, e:
-                print >>sys.stderr, "unhandled exception: ", traceback.print_exc()
-                self.respond(req, 'unhandled internal exception: ' + traceback.print_exc())
-                return -1
+                if self.chatty:
+                    print >>sys.stderr, traceback.print_exc()
+                self.respond(req, 'unhandled internal exception: ' + str(e.args[0]))
         else:
             self.respond(req, "unhandled message: %s" % (cmdName[req.ifcall.type]))
-            return -1
-        return 0
+        return
 
     def regreadfd(self, fd, req):
         '''Register a file descriptor in the read pool. When a fileserver
@@ -593,7 +592,6 @@ class Server(object):
             req.sock.reqs = []
             self.respond(req, None)
         
-
     def rflush(self, req, error):
         if req.oldreq:
             if req.oldreq.responded == 0:

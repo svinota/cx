@@ -52,6 +52,7 @@ class LocalFs(object):
         '''Stat-to-dir conversion'''
         s = _os(os.stat, f)
         u = uidname(s.st_uid)
+        g = gidname(s.st_gid)
         res = s.st_mode & 0777
         type = 0
         if stat.S_ISDIR(s.st_mode):
@@ -69,15 +70,13 @@ class LocalFs(object):
             return py9p.Dir(0, 0, s.st_dev, qid,
                 res,
                 int(s.st_atime), int(s.st_mtime),
-                s.st_size, os.path.basename(f), u, gidname(s.st_gid), u)
+                s.st_size, os.path.basename(f), u, g, u)
 
     def open(self, srv, req):
         f = self.getfile(req.fid.qid.path)
         if not f:
             srv.respond(req, "unknown file")
             return
-        d = self.pathtodir(f.localpath)
-
         if (req.ifcall.mode & 3) == py9p.OWRITE:
             if not self.cancreate:
                 srv.respond(req, "read-only file server")
@@ -96,13 +95,8 @@ class LocalFs(object):
                 m = "r+b"
         else:                # py9p.OREAD and otherwise
             m = "rb"
-
-        if d.qid.type & py9p.QTDIR:
-            # directories are handled at reading time
-            srv.respond(req, None)
-            return
-
-        f.fd = _os(file, f.localpath, m)
+        if not (f.qid.type & py9p.QTDIR):
+            f.fd = _os(file, f.localpath, m)
         srv.respond(req, None)
 
     def walk(self, srv, req):
@@ -118,19 +112,16 @@ class LocalFs(object):
                 # don't let us go beyond the original root
                 npath = self.root.localpath
 
-            if srv.chatty:
-                print 'walk: from:', f.localpath, "now:", path, 'resulting:', npath
-
             if path == '.' or path == '':
                 req.ofcall.wqid.append(f.qid)
             elif path == '..':
-                # .. resolves to the parent, circular at /
+                # .. resolves to the parent, cycles at /
                 qid = f.parent.qid
                 req.ofcall.wqid.append(qid)
                 f = f.parent
             else:
                 d = self.pathtodir(npath)
-                nf = self.getfile(d.qid)
+                nf = self.getfile(d.qid.path)
                 if nf:
                     # already exists, just append to req
                     req.ofcall.wqid.append(d.qid)
@@ -142,7 +133,7 @@ class LocalFs(object):
                     req.ofcall.wqid.append(d.qid)
                     f = d
                 else:
-                    srv.respond(req, "can't find %s"%req.ifcall.wname[0])
+                    srv.respond(req, "can't find %s"%path)
                     return
 
         srv.respond(req, None)

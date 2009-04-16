@@ -291,7 +291,7 @@ class AuthFs(object):
     A special file for performing p9sk1 authentication.  On completion
     of the protocol, suid is set to the authenticated username.
     """
-    type = ord('a')
+    type = 'sk1'
     HaveProtos,HaveSinfo,HaveSauth,NeedProto,NeedCchal,NeedTicket,Success = range(7)
     cancreate = 0
 
