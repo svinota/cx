@@ -308,7 +308,7 @@ def main():
             key = py9p.sk1.makeKey(passwd)
     elif authmode == 'pki':
         user = 'admin'
-    elif authmode != None:
+    elif authmode != None and authmode != 'none':
         print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
         sys.exit(1)
 
