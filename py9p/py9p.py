@@ -291,11 +291,13 @@ class Dir:
                     self.muidnum,
                     self.extension) = args[-4:]
 
-    def tolstr(self):
+    def tolstr(self, dirname=''):
+        if dirname != '':
+            dirname = dirname+'/'
         if self.dotu:
-            return "%s %d %d %-8d\t\t%s" % (modetostr(self.mode), self.uidnum, self.gidnum, self.length, self.name)
+            return "%s %d %d %-8d\t\t%s" % (modetostr(self.mode), self.uidnum, self.gidnum, self.length, dirname+self.name)
         else:
-            return "%s %s %s %-8d\t\t%s" % (modetostr(self.mode), self.uid, self.gid, self.length, self.name)
+            return "%s %s %s %-8d\t\t%s" % (modetostr(self.mode), self.uid, self.gid, self.length, dirname+self.name)
 
     def todata(self):
         '''This circumvents a leftower from the original 9P python implementation.
@@ -996,6 +998,8 @@ class Client(object):
         root = self.CWD
         if pstr == '':
             path = []
+        elif pstr.find('/') == -1:
+            path = [pstr]
         else:
             path = pstr.split("/")
             if path[0] == '':
@@ -1065,17 +1069,13 @@ class Client(object):
         ret = []
         if self.walk(pstr) is None:
             print "%s: not found" % pstr
-        else:
-            stats = self._stat(self.F).stat
-            for stat in stats:
-                ret.append(stat.tolstr())
-            self.close()
-        
-    def ls(self, long=0):
-        ret = []
-        if self.open() is None:
             return
+        fc = self._stat(self.F)
+        self.close()
+        return fc.stat
 
+    def lsdir(self):
+        ret = []
         while 1:
             buf = self.read(8192)
             if len(buf) == 0:
@@ -1089,12 +1089,44 @@ class Client(object):
                 self.close()
                 print >>sys.stderr, 'unexpected decstat error:', traceback.print_exc()
                 raise
-            for stat in fcall.stat:
-                if long:
-                    ret.append(stat.tolstr())
+            map(ret.append, fcall.stat)
+        return ret
+        
+    def ls(self, long=0, args=[]):
+        ret = []
+
+        cwd = self.CWD
+
+        if len(args) == 0:
+            if self.open() is None:
+                return
+            if long:
+                map(lambda z: ret.append(z.tolstr()), self.lsdir())
+            else:
+                map(lambda z: ret.append(z.name), self.lsdir())
+            self.close()
+        else:
+            for x in args:
+                stat = self.stat(x)
+                if len(stat) == 1:
+                    if stat[0].mode & DMDIR:
+                        self.open(x)
+                        lsd = self.lsdir()
+                        if long:
+                            map(lambda z: ret.append(z.tolstr(x)), lsd)
+                        else:
+                            map(lambda z: ret.append(x + '/' + z.name), lsd) 
+                        self.close()
+                    else:
+                        if long:
+                            # we already have full path+name, but tolstr() wants
+                            # to append the name to the end anyway, so strip
+                            # the last basename out to form identical path+name
+                            ret.append(stat[0].tolstr(x[0:-len(stat[0].name)-1]))
+                        else:
+                            ret.append(x)
                 else:
-                    ret.append(stat.name)
-        self.close()
+                    print '%s: returned multiple stats (internal error)' % x
         return ret
 
     def cd(self, pstr):

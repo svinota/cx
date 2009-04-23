@@ -95,17 +95,13 @@ class CmdClient(py9p.Client):
             self.stat(a)
     def _cmdls(self, args):
         long = 0
-        while len(args) > 0:
-            if args[0] == "-l":
-                long = 1
-            else:
-                print "usage: ls [-l]"
-                return
+        if len(args) > 0 and args[0] == '-l':
+            long = 1
             args[0:1] = []
         if long:
-            print '\n'.join(self.ls(long))
+            print '\n'.join(self.ls(long, args))
         else:
-            print ' '.join(self.ls(long))
+            print ' '.join(self.ls(long, args))
 
     def _cmdcd(self, args):
         if len(args) != 1:
