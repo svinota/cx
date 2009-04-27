@@ -820,18 +820,18 @@ class Server(object):
 
     def tstat(self, req):
         req.fid = req.sock.getfid(req.ifcall.fid)
+        req.ofcall.stat = []
         if not req.fid:
             self.respond(req, Eunknownfid)
             return
         if hasattr(self.fs, 'stat'):
-            self.fs.stat(req)
+            self.fs.stat(self, req)
         else:
             self.respond(req, Enostat)
 
     def rstat(self, req, error):
         if error:
             return
-        # XXX
 
     def twstat(self, req):
         req.fid = req.sock.getfid(req.ifcall.fid)
@@ -841,7 +841,7 @@ class Server(object):
         if not hasattr(self.fs, 'wstat'):
             self.respond(req, Enowstat)
             return
-        # XXX
+
     def rwstat(self, req, error):
         return
 
