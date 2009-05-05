@@ -1046,7 +1046,7 @@ class Client(object):
 
     def rm(self, pstr):
         self.open(pstr)
-        try
+        try:
             self._remove(self.F)
         except RpcError, e:
             self.close()
