@@ -244,7 +244,7 @@ class LocalFs(object):
         srv.respond(req, None)
 
 def usage(prog):
-    print "usage:  %s [-dcD] [-p port] [-r root] [-l listen] [-a authmode] [srvuser domain]" % prog
+    print >>sys.stderr, "usage:  %s [-dcD] [-p port] [-r root] [-l listen] [-a authmode] [srvuser domain]" % prog
     sys.exit(1)
 
 def main():
@@ -300,7 +300,7 @@ def main():
     elif authmode == 'pki':
         user = 'admin'
     elif authmode != None and authmode != 'none':
-        print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
+        print >>sys.stderr, "unknown auth type: %s; accepted: pki, sk1, none"%authmode
         sys.exit(1)
 
     srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=chatty)
