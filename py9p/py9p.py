@@ -438,7 +438,7 @@ class Server(object):
                             del self.activesocks[s]
                             del s
                         else:
-                            print >>sys.stderr, "error in fromnet (protocol botch?)", traceback.print_exc()
+                            print >>sys.stderr, "error in fromnet (protocol botch?)\n", traceback.print_exc()
                             print >>sys.stderr, "dropping connection..."
                             self.readpool.remove(s)
                             s.close()
