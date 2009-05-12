@@ -1019,12 +1019,11 @@ class Client(object):
         try: 
             fcall = self._walk(root, self.F, path)
         except RpcError,e:
-            print "%s: %s" % (pstr, e.args[0])
-            return
+            #print "%s: %s" % (pstr, e.args[0])
+            raise
 
         if len(fcall.wqid) < len(path):
-            print "%s: not found" % pstr
-            return
+            raise RpcError('incomplete walk (%d out of %d)'%(len(fcall.wqid), len(path)))
         return fcall.wqid
 
     def open(self, pstr='', mode=0):
@@ -1034,6 +1033,7 @@ class Client(object):
         try:
             fcall = self._open(self.F, mode)
         except RpcError, e:
+            print "%s: %s" % (pstr, e.args[0])
             self.close()
             raise
         return fcall
@@ -1082,7 +1082,6 @@ class Client(object):
     def stat(self, pstr):
         ret = []
         if self.walk(pstr) is None:
-            print "%s: not found" % pstr
             return
         fc = self._stat(self.F)
         self.close()
@@ -1122,6 +1121,8 @@ class Client(object):
         else:
             for x in args:
                 stat = self.stat(x)
+                if not stat:
+                    return # stat already printed a message
                 if len(stat) == 1:
                     if stat[0].mode & DMDIR:
                         self.open(x)

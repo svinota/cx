@@ -98,10 +98,12 @@ class CmdClient(py9p.Client):
         if len(args) > 0 and args[0] == '-l':
             long = 1
             args[0:1] = []
-        if long:
-            print '\n'.join(self.ls(long, args))
-        else:
-            print ' '.join(self.ls(long, args))
+        ret = self.ls(long, args)
+        if ret:
+            if long:
+                print '\n'.join(ret)
+            else:
+                print ' '.join(self.ls(long, args))
 
     def _cmdcd(self, args):
         if len(args) != 1:
