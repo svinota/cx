@@ -97,7 +97,9 @@ class CmdClient(py9p.Client):
             buf = ''
         else:
             buf = ' '.join(args[1:])
-        buf = buf+'\n'
+
+        if buf[-1] != '\n':
+            buf = buf+'\n'
 
         name = args[0]
         x = self.open(name, py9p.OWRITE|py9p.OTRUNC)
