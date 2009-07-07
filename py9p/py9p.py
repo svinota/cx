@@ -114,6 +114,8 @@ def modetostr(mode):
     d = "-"
     if mode & DMDIR:
         d = "d"
+    elif mode & DMAPPEND:
+        d = "a"
     return "%s%s%s%s" % (d, b(6), b(3), b(0))
 
 def hash8(obj):

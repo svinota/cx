@@ -90,6 +90,22 @@ class CmdClient(py9p.Client):
             self.write(buf)
         self.close()
 
+    def _cmdecho(self, args):
+        if len(args) < 1:
+            print "echo: no file name"
+        elif len(args) == 1:
+            buf = ''
+        else:
+            buf = ' '.join(args[1:])
+        buf = buf+'\n'
+
+        name = args[0]
+        x = self.open(name, py9p.OWRITE|py9p.OTRUNC)
+        if x is None:
+            return
+        self.write(buf)
+        self.close()
+
     def _cmdstat(self, args):
         for a in args:
             self.stat(a)
