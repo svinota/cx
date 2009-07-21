@@ -309,7 +309,7 @@ class Dir:
         '''This circumvents a leftower from the original 9P python implementation.
         Why do enc functions have to hide data in "bytes"? I don't know'''
 
-        n = Marshal9P()
+        n = Marshal9P(dotu=self.dotu)
         n.setBuf()
         if self.dotu:
             size = 2+4+13+4+4+4+8+len(self.name)+len(self.uid)+len(self.gid)+len(self.muid)+2+2+2+2+4+4+4
