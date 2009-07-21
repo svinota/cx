@@ -196,6 +196,8 @@ class Marshal9P(Marshal):
             self.enc4(fcall.afid)
             self.encS(fcall.uname)
             self.encS(fcall.aname)
+            if self.dotu:
+                self.enc4(fcall.uidnum)
         elif fcall.type == py9p.Rauth:
             self.encQ(fcall.aqid)
         elif fcall.type == py9p.Rerror:
@@ -207,6 +209,8 @@ class Marshal9P(Marshal):
             self.enc4(fcall.afid)
             self.encS(fcall.uname)
             self.encS(fcall.aname)
+            if self.dotu:
+                self.enc4(fcall.uidnum)
         elif fcall.type == py9p.Rattach:
             self.encQ(fcall.afid)
         elif fcall.type == py9p.Twalk:
@@ -290,6 +294,8 @@ class Marshal9P(Marshal):
             fcall.afid = self.dec4()
             fcall.uname = self.decS()
             fcall.aname = self.decS()
+            if self.dotu:
+                fcall.uidnum = self.dec4()
         elif fcall.type == py9p.Rauth:
             fcall.aqid = self.decQ()
         elif fcall.type == py9p.Rerror:
@@ -301,6 +307,8 @@ class Marshal9P(Marshal):
             fcall.afid = self.dec4()
             fcall.uname = self.decS()
             fcall.aname = self.decS()
+            if self.dotu:
+                fcall.uidnum = self.dec4()
         elif fcall.type == py9p.Rattach:
             fcall.afid = self.decQ()
         elif fcall.type == py9p.Twalk:
