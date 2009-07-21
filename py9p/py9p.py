@@ -289,8 +289,8 @@ class Dir:
                 self.name,
                 self.uid,
                 self.gid,
-                self.muid) = args
-                
+                self.muid) = args[:11]
+
             if dotu:
                 (self.uidnum,
                     self.gidnum,
