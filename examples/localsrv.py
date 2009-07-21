@@ -311,7 +311,7 @@ def main():
         print >>sys.stderr, "unknown auth type: %s; accepted: pki, sk1, none"%authmode
         sys.exit(1)
 
-    srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=chatty)
+    srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=chatty, dotu=dotu)
     srv.mount(LocalFs(root, cancreate, dotu))
     srv.serve()
 
