@@ -16,7 +16,7 @@ This module requires the Python Cryptography Toolkit from
 http://www.amk.ca/python/writing/pycrypt/pycrypt.html
 """
 
-import md5, base64, struct, os, random
+import base64, struct, os, random
 import cPickle as pickle
 import Crypto.Util as util
 import Crypto.Cipher.DES3 as DES3
@@ -24,6 +24,12 @@ from Crypto.Cipher import DES
 from Crypto.PublicKey import RSA
 from Crypto.Util.randpool import RandomPool
 from Crypto.Util import number
+
+try:
+    from hashlib import md5
+except ImportError:
+    # for python < 2.5
+    from md5 import new as md5
 
 import py9p
 
@@ -131,8 +137,8 @@ def privkeytostr(key, passphrase = None):
         hexiv = ''.join(['%02X' % ord(x) for x in iv])
         keyData += 'Proc-Type: 4,ENCRYPTED\n'
         keyData += 'DEK-Info: DES-EDE3-CBC,%s\n\n' % hexiv
-        ba = md5.new(passphrase + iv).digest()
-        bb = md5.new(ba + passphrase + iv).digest()
+        ba = md5(passphrase + iv).digest()
+        bb = md5(ba + passphrase + iv).digest()
         encKey = (ba + bb)[:24]
     asn1Data = asn1pack([objData])
     if passphrase:
@@ -168,8 +174,8 @@ def strtoprivkey(data, passphrase):
         iv = ''.join([chr(int(ivdata[i:i+2],16)) for i in range(0, len(ivdata), 2)])
         if not passphrase:
             raise BadKeyError, 'encrypted key with no passphrase'
-        ba = md5.new(passphrase + iv).digest()
-        bb = md5.new(ba + passphrase + iv).digest()
+        ba = md5(passphrase + iv).digest()
+        bb = md5(ba + passphrase + iv).digest()
         decKey = (ba + bb)[:24]
         b64Data = base64.decodestring(''.join(data[4:-1]))
         keyData = DES3.new(decKey, DES3.MODE_CBC, iv).decrypt(b64Data)
