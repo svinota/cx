@@ -934,6 +934,8 @@ class Client(object):
         fcall = Fcall(Tread)
         fcall.fid = fid
         fcall.offset = off
+        if count > self.msize - IOHDRSZ:
+            count = self.msize - IOHDRSZ
         fcall.count = count
         return self._rpc(fcall)
     def _write(self, fid, off, data):
