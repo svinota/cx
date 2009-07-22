@@ -351,7 +351,7 @@ class Server(object):
     A server interface to the protocol.
     Subclass this to provide service
     """
-    msize = 8192 + IOHDRSZ
+    msize = 8192
     chatty = False
     readpool = []
     writepool = []
@@ -869,7 +869,7 @@ class Client(object):
     path = '' # for 'getwd' equivalent
     chatty = 0
     msg = None
-    msize = 8192 + IOHDRSZ
+    msize = 8192 - IOHDRSZ
 
     def __init__(self, fd, authmode=None, user=None, passwd=None, authsrv=None, chatty=0, key=None):
         self.authmode = authmode

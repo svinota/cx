@@ -121,7 +121,7 @@ class CmdClient(py9p.Client):
             if long:
                 print '\n'.join(ret)
             else:
-                print ' '.join(self.ls(long, args))
+                print ' '.join(ret)
 
     def _cmdcd(self, args):
         if len(args) != 1:
