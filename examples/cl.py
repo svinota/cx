@@ -9,8 +9,6 @@ import readline
 import atexit
 
 import py9p
-import py9p.pki
-import py9p.sk1
 
 class Error(py9p.Error): pass
 
