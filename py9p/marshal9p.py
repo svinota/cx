@@ -164,7 +164,7 @@ class Marshal9P(Marshal):
                     totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2+4+4+4
                 else:
                     totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2
-            self.enc2(totsz+2)
+            self.enc2(totsz)
 
         for x in fcall.stat:
             if self.dotu:
@@ -250,10 +250,9 @@ class Marshal9P(Marshal):
         elif fcall.type in (py9p.Rstat, py9p.Twstat):
             if fcall.type == py9p.Twstat:
                 self.enc4(fcall.fid)
-            self.encstat(fcall, 0)
+            self.encstat(fcall, 1)
 
-
-    def decstat(self, fcall, enclen=1):
+    def decstat(self, fcall, enclen=0):
         fcall.stat = []
         if enclen:
             totsz = self.dec2()
@@ -343,6 +342,6 @@ class Marshal9P(Marshal):
         elif fcall.type in (py9p.Rstat, py9p.Twstat):
             if fcall.type == py9p.Twstat:
                 fcall.fid = self.dec4()
-            self.decstat(fcall, 0)
+            self.decstat(fcall, 1)
 
         return fcall
