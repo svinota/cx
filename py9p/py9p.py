@@ -590,7 +590,7 @@ class Server(object):
         if hasattr(self.fs, 'attach'):
             self.fs.attach()
         else:
-            req.ofcall.afid = self.fs.root.qid
+            req.ofcall.qid = self.fs.root.qid
             req.fid.qid = self.fs.root.qid
             self.respond(req, None)
         return

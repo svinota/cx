@@ -212,7 +212,7 @@ class Marshal9P(Marshal):
             if self.dotu:
                 self.enc4(fcall.uidnum)
         elif fcall.type == py9p.Rattach:
-            self.encQ(fcall.afid)
+            self.encQ(fcall.qid)
         elif fcall.type == py9p.Twalk:
             self.enc4(fcall.fid)
             self.enc4(fcall.newfid)
@@ -310,7 +310,7 @@ class Marshal9P(Marshal):
             if self.dotu:
                 fcall.uidnum = self.dec4()
         elif fcall.type == py9p.Rattach:
-            fcall.afid = self.decQ()
+            fcall.qid = self.decQ()
         elif fcall.type == py9p.Twalk:
             fcall.fid = self.dec4()
             fcall.newfid = self.dec4()
