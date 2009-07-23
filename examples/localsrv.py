@@ -48,22 +48,33 @@ class LocalFs(object):
 
     def pathtodir(self, f):
         '''Stat-to-dir conversion'''
-        s = _os(os.stat, f)
+        s = _os(os.lstat, f)
         u = uidname(s.st_uid)
         g = gidname(s.st_gid)
         res = s.st_mode & 0777
         type = 0
+        ext = ""
         if stat.S_ISDIR(s.st_mode):
             type = type | py9p.QTDIR
             res = res | py9p.DMDIR
 
         qid = py9p.Qid(type, 0, py9p.hash8(os.path.basename(f)))
         if self.dotu:
+            if stat.S_ISLNK(s.st_mode):
+                ext = os.readlink(f.localpath)
+                ext = os.path.join(os.path.dirname(f.localpath), ext)
+            elif stat.S_ISCHR(s.st_mode):
+                ext = "c %d %d" % (os.major(s.st_rdev), os.minor(s.st_rdev))
+            elif stat.S_ISBLK(s.st_mode):
+                ext = "b %d %d" % (os.major(s.st_rdev), os.minor(s.st_rdev))
+            else:
+                ext = ""
+
             return py9p.Dir(1, 0, s.st_dev, qid,
                 res,
                 int(s.st_atime), int(s.st_mtime),
                 s.st_size, os.path.basename(f), u, gidname(s.st_gid), u,
-                s.st_uid, s.st_gid, s.st_uid, '')
+                ext, s.st_uid, s.st_gid, s.st_uid)
         else:
             return py9p.Dir(0, 0, s.st_dev, qid,
                 res,

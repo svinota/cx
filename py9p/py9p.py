@@ -292,10 +292,10 @@ class Dir:
                 self.muid) = args[:11]
 
             if dotu:
-                (self.uidnum,
+                (self.extension,
+                    self.uidnum,
                     self.gidnum,
-                    self.muidnum,
-                    self.extension) = args[-4:]
+                    self.muidnum) = args[-4:]
 
     def tolstr(self, dirname=''):
         if dirname != '':
@@ -312,7 +312,7 @@ class Dir:
         n = Marshal9P(dotu=self.dotu)
         n.setBuf()
         if self.dotu:
-            size = 2+4+13+4+4+4+8+len(self.name)+len(self.uid)+len(self.gid)+len(self.muid)+2+2+2+2+4+4+4
+            size = 2+4+13+4+4+4+8+len(self.name)+len(self.uid)+len(self.gid)+len(self.muid)+2+2+2+2+len(self.extension)+2+4+4+4
         else:
             size = 2+4+13+4+4+4+8+len(self.name)+len(self.uid)+len(self.gid)+len(self.muid)+2+2+2+2
         n.enc2(size)
@@ -328,9 +328,10 @@ class Dir:
         n.encS(self.gid)
         n.encS(self.muid)
         if self.dotu:
-            n.encS(self.uidnum)
-            n.encS(self.gidnum)
-            n.encS(self.muidnum)
+            n.encS(self.extension)
+            n.enc4(self.uidnum)
+            n.enc4(self.gidnum)
+            n.enc4(self.muidnum)
         return n.bytes
 
 class Req:

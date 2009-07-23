@@ -157,21 +157,17 @@ class Marshal9P(Marshal):
         return fcall
 
     def encstat(self, fcall, enclen=1):
-        totsz = 0
+        statsz = 0
         if enclen:
             for x in fcall.stat:
                 if self.dotu:
-                    totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2+4+4+4
+                    statsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2+len(x.extension)+2+4+4+4
                 else:
-                    totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2
-            self.enc2(totsz)
+                    statsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2
+            self.enc2(statsz + 2)
 
         for x in fcall.stat:
-            if self.dotu:
-                size = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2+4+4+4
-            else:
-                size = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2
-            self.enc2(size)
+            self.enc2(statsz)
             self.enc2(x.type)
             self.enc4(x.dev)
             self.encQ(x.qid)
@@ -184,9 +180,10 @@ class Marshal9P(Marshal):
             self.encS(x.gid)
             self.encS(x.muid)
             if self.dotu:
-                self.encS(x.uidnum)
-                self.encS(x.gidnum)
-                self.encS(x.muidnum)
+                self.encS(x.extension)
+                self.enc4(x.uidnum)
+                self.enc4(x.gidnum)
+                self.enc4(x.muidnum)
 
     def enc(self, fcall):
         if fcall.type in (py9p.Tversion, py9p.Rversion):
@@ -278,6 +275,7 @@ class Marshal9P(Marshal):
             stat.gid = self.decS()      # gid
             stat.muid = self.decS()     # muid
             if self.dotu:
+                stat.extension = self.decS()
                 stat.uidnum = self.dec4()
                 stat.gidnum = self.dec4()
                 stat.muidnum = self.dec4()
