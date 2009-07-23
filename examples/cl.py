@@ -110,7 +110,9 @@ class CmdClient(py9p.Client):
 
     def _cmdstat(self, args):
         for a in args:
-            self.stat(a)
+            stat = self.stat(a)
+            print stat[0].tolstr()
+
     def _cmdls(self, args):
         long = 0
         if len(args) > 0 and args[0] == '-l':

@@ -39,10 +39,10 @@ class Marshal(object):
 
     def _checkSize(self, v, mask):
         if v != v & mask:
-            raise Error("Invalid value %d" % v)
+            raise py9p.Error("Invalid value %d" % v)
     def _checkLen(self, x, l):
         if len(x) != l:
-            raise Error("Wrong length %d, expected %d: %r" % (len(x), l, x))
+            raise py9p.Error("Wrong length %d, expected %d: %r" % (len(x), l, x))
 
     def encX(self, x):
         "Encode opaque data"
@@ -122,10 +122,10 @@ class Marshal9P(Marshal):
 
     def _checkType(self, t):
         if not py9p.cmdName.has_key(t):
-            raise Error("Invalid message type %d" % t)
+            raise py9p.Error("Invalid message type %d" % t)
     def _checkResid(self):
         if len(self.bytes):
-            raise Error("Extra information in message: %r" % self.bytes)
+            raise py9p.Error("Extra information in message: %r" % self.bytes)
 
     def send(self, fd, fcall):
         "Format and send a message"
@@ -145,7 +145,7 @@ class Marshal9P(Marshal):
         self.setBuf(fd.read(4))
         size = self.dec4()
         if size > self.MAXSIZE or size < 4:
-            raise Error("Bad message size: %d" % size)
+            raise py9p.Error("Bad message size: %d" % size)
         self.setBuf(fd.read(size - 4))
         type,tag = self.dec1(),self.dec2()
         self._checkType(type)
@@ -156,14 +156,15 @@ class Marshal9P(Marshal):
             print "<-%d-" % fd.fileno(), py9p.cmdName[type], tag, fcall.tostr()
         return fcall
 
-    def encstat(self, fcall):
+    def encstat(self, fcall, enclen=1):
         totsz = 0
-        for x in fcall.stat:
-            if self.dotu:
-                totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2+4+4+4
-            else:
-                totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2
-        self.enc2(totsz+2)
+        if enclen:
+            for x in fcall.stat:
+                if self.dotu:
+                    totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2+4+4+4
+                else:
+                    totsz = 2+4+13+4+4+4+8+len(x.name)+len(x.uid)+len(x.gid)+len(x.muid)+2+2+2+2
+            self.enc2(totsz+2)
 
         for x in fcall.stat:
             if self.dotu:
@@ -248,8 +249,8 @@ class Marshal9P(Marshal):
             self.enc4(fcall.fid)
         elif fcall.type in (py9p.Rstat, py9p.Twstat):
             if fcall.type == py9p.Twstat:
-                self.dec4(fcall.fid)
-            self.encstat(fcall)
+                self.enc4(fcall.fid)
+            self.encstat(fcall, 0)
 
 
     def decstat(self, fcall, enclen=1):
@@ -342,6 +343,6 @@ class Marshal9P(Marshal):
         elif fcall.type in (py9p.Rstat, py9p.Twstat):
             if fcall.type == py9p.Twstat:
                 fcall.fid = self.dec4()
-            self.decstat(fcall)
+            self.decstat(fcall, 0)
 
         return fcall

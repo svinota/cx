@@ -210,6 +210,14 @@ class LocalFs(object):
             f.fd = None
         srv.respond(req, None)
 
+    def stat(self, srv, req):
+        f = self.getfile(req.fid.qid.path)
+        if not f:
+            srv.respond(req, "unknown file")
+            return
+        req.ofcall.stat.append(self.pathtodir(f.localpath))
+        srv.respond(req, None)
+
     def read(self, srv, req):
         f = self.getfile(req.fid.qid.path)
         if not f:

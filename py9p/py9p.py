@@ -869,7 +869,7 @@ class Client(object):
     path = '' # for 'getwd' equivalent
     chatty = 0
     msg = None
-    msize = 8192 - IOHDRSZ
+    msize = 8192
 
     def __init__(self, fd, authmode=None, user=None, passwd=None, authsrv=None, chatty=0, key=None):
         self.authmode = authmode
@@ -1094,7 +1094,7 @@ class Client(object):
     def lsdir(self):
         ret = []
         while 1:
-            buf = self.read(8192)
+            buf = self.read(self.msize)
             if len(buf) == 0:
                 break
             p9 = Marshal9P()
