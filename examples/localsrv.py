@@ -145,6 +145,7 @@ class LocalFs(object):
                     srv.respond(req, "can't find %s"%path)
                     return
 
+        req.ofcall.nwqid = len(req.ofcall.wqid)
         srv.respond(req, None)
 
     def remove(self, srv, req):

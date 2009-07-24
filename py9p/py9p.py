@@ -643,7 +643,7 @@ class Server(object):
             req.newfid = req.fid
 
         if len(req.ifcall.wname) == 0:
-            req.ofcall.wqid.append(req.fid.qid)
+            req.ofcall.nwqid = 0
             self.respond(req, None)
         elif hasattr(self.fs, 'walk'):
             self.fs.walk(self, req)

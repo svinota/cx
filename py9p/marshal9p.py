@@ -312,11 +312,11 @@ class Marshal9P(Marshal):
         elif fcall.type == py9p.Twalk:
             fcall.fid = self.dec4()
             fcall.newfid = self.dec4()
-            l = self.dec2()
-            fcall.wname = [self.decS() for n in xrange(l)]
+            fcall.nwname = self.dec2()
+            fcall.wname = [self.decS() for n in xrange(fcall.nwname)]
         elif fcall.type == py9p.Rwalk:
-            l = self.dec2()
-            fcall.wqid = [self.decQ() for n in xrange(l)]
+            fcall.nwqid = self.dec2()
+            fcall.wqid = [self.decQ() for n in xrange(fcall.nwqid)]
         elif fcall.type == py9p.Topen:
             fcall.fid = self.dec4()
             fcall.mode = self.dec1()
