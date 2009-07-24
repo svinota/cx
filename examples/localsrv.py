@@ -61,8 +61,8 @@ class LocalFs(object):
         qid = py9p.Qid(type, 0, py9p.hash8(os.path.basename(f)))
         if self.dotu:
             if stat.S_ISLNK(s.st_mode):
-                ext = os.readlink(f.localpath)
-                ext = os.path.join(os.path.dirname(f.localpath), ext)
+                ext = os.readlink(f)
+                ext = os.path.join(os.path.dirname(f), ext)
             elif stat.S_ISCHR(s.st_mode):
                 ext = "c %d %d" % (os.major(s.st_rdev), os.minor(s.st_rdev))
             elif stat.S_ISBLK(s.st_mode):
