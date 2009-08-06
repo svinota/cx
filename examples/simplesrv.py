@@ -141,11 +141,13 @@ def main(prog, *args):
             print >>sys.stderr, 'missing user and authsrv'
             usage(prog)
         else:
+            py9p.sk1 = __import__("py9p.sk1").sk1
             user = args[0]
             dom = args[1]
             passwd = getpass.getpass()
             key = py9p.sk1.makeKey(passwd)
     elif authmode == 'pki':
+        py9p.pki = __import__("py9p.pki").pki
         user = 'admin'
     elif authmode != None and authmode != 'none':
         print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
