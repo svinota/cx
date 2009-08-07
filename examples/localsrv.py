@@ -6,6 +6,8 @@ import stat
 import os.path
 import copy
 import time
+import pwd
+import grp
 
 import py9p
 
@@ -23,9 +25,17 @@ def _nf(func, *args):
     except py9p.ServerError,e:
         return
 
-def uidname(u):            # XXX
-    return "%d" % u
-gidname = uidname            # XXX
+def uidname(u):
+    try:
+        return "%s" % pwd.getpwuid(u).pw_name
+    except KeyError,e:
+        return "%d" % u
+
+def gidname(g):
+    try:
+        return "%s" % grp.getgrgid(g).gr_name
+    except KeyError,e:
+        return "%d" % g
 
 class LocalFs(object):
     """
