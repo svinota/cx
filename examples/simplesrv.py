@@ -84,7 +84,7 @@ class SampleFs(py9p.Server):
 
     def read(self, srv, req):
         if not self.files.has_key(req.fid.qid.path):
-            raise py9p.ServError("unknown file")
+            raise py9p.ServerError("unknown file")
 
         f = self.files[req.fid.qid.path]
         if f.qid.type & py9p.QTDIR:
