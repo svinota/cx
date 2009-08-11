@@ -104,6 +104,7 @@ auths = ['pki', 'sk1']
 
 class Error(Exception): pass
 class EofError(Error): pass
+class EdupfidError(Error): pass
 class RpcError(Error): pass
 class ServerError(Error): pass
 class ClientError(Error): pass
@@ -243,7 +244,7 @@ class Qid(object):
 class Fid(object):
     def __init__(self, pool, fid, path='', auth=0):
         if fid in pool:
-            return None
+            raise EdupfidError(Edupfid)
         self.fid = fid
         self.ref = 1
         self.omode=-1
@@ -553,8 +554,9 @@ class Server(object):
             self.respond(req, "%s: authentication not required"%(sys.argv[0]))
             return
 
-        req.afid = Fid(req.sock.fids, req.ifcall.afid, auth=1)
-        if not req.afid:
+        try:
+            req.afid = Fid(req.sock.fids, req.ifcall.afid, auth=1)
+        except EdupfidError, e:
             self.respond(req, Edupfid)
             return
         req.afid.uname = req.ifcall.uname
@@ -568,8 +570,9 @@ class Server(object):
             req.sock.delfid(req.afid.fid)
 
     def tattach(self, req):
-        req.fid = Fid(req.sock.fids, req.ifcall.fid)
-        if not req.fid:
+        try:
+            req.fid = Fid(req.sock.fids, req.ifcall.fid)
+        except EdupfidError, e:
             self.respond(req, Edupfid)
             return
 
@@ -634,8 +637,9 @@ class Server(object):
             self.respond(req, Ewalknotdir)
             return
         if req.ifcall.fid != req.ifcall.newfid:
-            req.newfid = Fid(req.sock.fids, req.ifcall.newfid)
-            if not req.newfid:
+            try:
+                req.newfid = Fid(req.sock.fids, req.ifcall.newfid)
+            except EdupfidError, e:
                 self.respond(req, Edupfid)
                 return
             req.newfid.uid = req.fid.uid
