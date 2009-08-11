@@ -121,7 +121,7 @@ class Marshal9P(Marshal):
         return py9p.Qid(self.dec1(), self.dec4(), self.dec8())
 
     def _checkType(self, t):
-        if not py9p.cmdName.has_key(t):
+        if t not in py9p.cmdName:
             raise py9p.Error("Invalid message type %d" % t)
     def _checkResid(self):
         if len(self.bytes):
