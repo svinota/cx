@@ -218,7 +218,6 @@ class LocalFs(object):
         req.ofcall.qid = d.qid
         srv.respond(req, None)
 
-        
     def clunk(self, srv, req):
         f = self.getfile(req.fid.qid.path)
         if not f:

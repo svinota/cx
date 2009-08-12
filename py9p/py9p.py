@@ -811,9 +811,11 @@ class Server(object):
         req.fid = req.sock.getfid(req.ifcall.fid)
         if not req.fid:
             self.respond(req, Eunknownfid)
-        else:
-            req.sock.delfid(req.ifcall.fid)
-            self.respond(req, None)
+            return
+        if hasattr(self.fs, 'clunk'):
+            self.fs.write(self, req)
+        req.sock.delfid(req.ifcall.fid)
+        self.respond(req, None)
 
     def rclunk(self, req, error):
         return
