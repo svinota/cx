@@ -779,7 +779,7 @@ class Server(object):
             return self.respond(req, Eunknownfid)
         if req.fid.omode == -1 :
             return self.respond(req, Eopen)
-        if req.ifcall.count < 0 and req.ifcall.offset < 0:
+        if req.ifcall.count < 0 or req.ifcall.offset < 0:
             return self.respond(req, Ebotch)
         if req.fid.qid.type & QTAUTH and self.authfs:
             self.authfs.write(self, req)
