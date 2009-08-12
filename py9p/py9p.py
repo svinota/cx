@@ -48,7 +48,7 @@ Eperm = "permission denied"
 Eunknownfid = "unknown fid"
 Ebaddir = "bad directory in wstat"
 Ewalknotdir = "walk in non-directory"
-Eopen = "fid not open"
+Eopen = "file not open"
 
 NOTAG = 0xffff
 NOFID = 0xffffffffL
