@@ -103,6 +103,8 @@ DMEXEC      =0x1     # mode bit for execute permission
 auths = ['pki', 'sk1']
 
 class Error(Exception): pass
+class EofError(Error): pass
+class EdupfidError(Error): pass
 class RpcError(Error): pass
 class ServerError(Error): pass
 class ClientError(Error): pass
@@ -160,7 +162,7 @@ def hasperm(f, uid, p):
             return 1
     return 0
 
-class Sock:
+class Sock(object):
     """Provide appropriate read and write methods for the Marshaller"""
     def __init__(self, sock):
         self.sock = sock
@@ -172,7 +174,7 @@ class Sock:
         while len(x) < l:
             b = self.sock.recv(l - len(x))
             if not b:
-                raise Error("client eof")
+                raise EofError("client eof")
             x += b
         return x
     def write(self, buf):
@@ -190,7 +192,7 @@ class Sock:
             return self.fids[fid]
         return None
 
-class Fcall:
+class Fcall(object):
     '''# possible values, from p9p's fcall.h
     msize       # Tversion, Rversion
     version     # Tversion, Rversion
@@ -225,24 +227,24 @@ class Fcall:
         self.fid = fid
         self.tag = tag
     def tostr(self):
-        attr = filter(lambda x: not x.startswith('_') and not x.startswith('tostr'), dir(self))
+        attr = [x for x in dir(self) if not x.startswith('_') and not x.startswith('tostr')]
 
-        ret = ' '.join(map(lambda x: "%s=%s" % (x, getattr(self, x)), attr))
+        ret = ' '.join("%s=%s" % (x, getattr(self, x)) for x in attr)
         ret = cmdName[self.type] + " " + ret
 
         return repr(ret)
 
 
-class Qid:
+class Qid(object):
     def __init__(self, type=None, vers=None, path=None):
         self.type = type
         self.vers = vers
         self.path = path
 
-class Fid:
+class Fid(object):
     def __init__(self, pool, fid, path='', auth=0):
-        if pool.has_key(fid):
-            return None
+        if fid in pool:
+            raise EdupfidError(Edupfid)
         self.fid = fid
         self.ref = 1
         self.omode=-1
@@ -253,7 +255,7 @@ class Fid:
 
         pool[fid] = self
 
-class Dir:
+class Dir(object):
     # type:         server type
     # dev           server subtype
     #
@@ -295,7 +297,7 @@ class Dir:
                 (self.extension,
                     self.uidnum,
                     self.gidnum,
-                    self.muidnum) = args[-4:]
+                    self.muidnum) = args[11:15]
 
     def tolstr(self, dirname=''):
         if dirname != '':
@@ -334,7 +336,7 @@ class Dir:
             n.enc4(self.muidnum)
         return n.bytes
 
-class Req:
+class Req(object):
     def __init__(self, tag, fd = None, ifcall=None, ofcall=None, dir=None, oldreq=None,
     fid=None, afid=None, newfid=None):
         self.tag = tag
@@ -432,21 +434,20 @@ class Server(object):
                             print >>sys.stderr, "socket error: " + e.args[1]
                         self.readpool.remove(s)
                         del self.activesocks[s]
+                    except EofError, e:
+                        if self.chatty:
+                            print >>sys.stderr, "socket closed: " + e.args[0]
+                        self.readpool.remove(s)
+                        s.close()
+                        del self.activesocks[s]
+                        del s
                     except Exception, e:
-                        if e.args[0] == 'client eof':
-                            if self.chatty:
-                                print >>sys.stderr, "socket closed: " + e.args[0]
-                            self.readpool.remove(s)
-                            s.close()
-                            del self.activesocks[s]
-                            del s
-                        else:
-                            print >>sys.stderr, "error in fromnet (protocol botch?)\n", traceback.print_exc()
-                            print >>sys.stderr, "dropping connection..."
-                            self.readpool.remove(s)
-                            s.close()
-                            del self.activesocks[s]
-                            del s
+                        print >>sys.stderr, "error in fromnet (protocol botch?)\n", traceback.print_exc()
+                        print >>sys.stderr, "dropping connection..."
+                        self.readpool.remove(s)
+                        s.close()
+                        del self.activesocks[s]
+                        del s
 
         if self.chatty:
             print >>sys.stderr, "main socket closed"
@@ -475,13 +476,14 @@ class Server(object):
             if self.chatty:
                 print >>sys.stderr, "socket error: " + e.args[1]
             self.readpool.remove(s)
+        except EofError, e:
+            if self.chatty:
+                print >>sys.stderr, "socket closed: " + e.args[0]
+            self.readpool.remove(s)
         except Exception, e:
-            if e.args[0] == 'client eof':
-                if self.chatty:
-                    print >>sys.stderr, "socket closed: " + e.args[0]
-                self.readpool.remove(s)
-            else:
-                raise
+            if self.chatty:
+                print >>sys.stderr, "socket error: " + e.args[1]
+            self.readpool.remove(s)
 
         # XXX: unsure whether we need proper flushing semantics from rsc's p9p
         # thing is, we're not threaded.
@@ -504,7 +506,7 @@ class Server(object):
             func = getattr(self, name)
             try:
                 func(req)
-            except (ServerError, Error) ,e:
+            except Error, e:
                 if self.chatty:
                     print >>sys.stderr, traceback.print_exc()
                 self.respond(req, 'server error:' + str(e.args[0]))
@@ -552,8 +554,9 @@ class Server(object):
             self.respond(req, "%s: authentication not required"%(sys.argv[0]))
             return
 
-        req.afid = Fid(req.sock.fids, req.ifcall.afid, auth=1)
-        if not req.afid:
+        try:
+            req.afid = Fid(req.sock.fids, req.ifcall.afid, auth=1)
+        except EdupfidError, e:
             self.respond(req, Edupfid)
             return
         req.afid.uname = req.ifcall.uname
@@ -567,8 +570,9 @@ class Server(object):
             req.sock.delfid(req.afid.fid)
 
     def tattach(self, req):
-        req.fid = Fid(req.sock.fids, req.ifcall.fid)
-        if not req.fid:
+        try:
+            req.fid = Fid(req.sock.fids, req.ifcall.fid)
+        except EdupfidError, e:
             self.respond(req, Edupfid)
             return
 
@@ -633,8 +637,9 @@ class Server(object):
             self.respond(req, Ewalknotdir)
             return
         if req.ifcall.fid != req.ifcall.newfid:
-            req.newfid = Fid(req.sock.fids, req.ifcall.newfid)
-            if not req.newfid:
+            try:
+                req.newfid = Fid(req.sock.fids, req.ifcall.newfid)
+            except EdupfidError, e:
                 self.respond(req, Edupfid)
                 return
             req.newfid.uid = req.fid.uid
@@ -1109,7 +1114,7 @@ class Client(object):
                 self.close()
                 print >>sys.stderr, 'unexpected decstat error:', traceback.print_exc()
                 raise
-            map(ret.append, fcall.stat)
+            ret += fcall.stat
         return ret
         
     def ls(self, long=0, args=[]):
@@ -1121,9 +1126,9 @@ class Client(object):
             if self.open() is None:
                 return
             if long:
-                map(lambda z: ret.append(z.tolstr()), self.lsdir())
+                ret = [z.tolstr() for z in self.lsdir()]
             else:
-                map(lambda z: ret.append(z.name), self.lsdir())
+                ret = [z.name for z in self.lsdir()]
             self.close()
         else:
             for x in args:
@@ -1135,9 +1140,9 @@ class Client(object):
                         self.open(x)
                         lsd = self.lsdir()
                         if long:
-                            map(lambda z: ret.append(z.tolstr(x)), lsd)
+                            ret += [z.tolstr(x) for x in lsd]
                         else:
-                            map(lambda z: ret.append(x + '/' + z.name), lsd) 
+                            ret += [x + '/' + z.name for x in lsd]
                         self.close()
                     else:
                         if long:
