@@ -1079,8 +1079,10 @@ class Client(object):
         ret = []
         if self.walk(pstr) is None:
             return
-        fc = self._stat(self.F)
-        self.close()
+        try:
+            fc = self._stat(self.F)
+        finally:
+            self.close()
         return fc.stat
 
     def lsdir(self):
