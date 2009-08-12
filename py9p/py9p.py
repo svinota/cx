@@ -379,6 +379,7 @@ class Server(object):
 
         self.readpool = []
         self.writepool = []
+        self.deferreq = {}
         self.marshal = Marshal9P(dotu=self.dotu, chatty=chatty)
         self.user = user
         self.dom = dom
@@ -402,7 +403,7 @@ class Server(object):
     def serve(self):
         while len(self.readpool) > 0 or len(self.writepool) > 0:
             inr, outr, excr = select.select(self.readpool, self.writepool, [])
-            for s in inr:
+            for s in (inr + outr + excr) :
                 if s == self.sock:
                     cl, addr = s.accept()
                     self.readpool.append(cl)
@@ -410,23 +411,23 @@ class Server(object):
                     if self.chatty:
                         print >>sys.stderr, "accepted connection from: %s" % str(addr)
                 else:
-                    if hasattr(s, 'req'):
+                    if s in self.deferreq :
                         # this is a fs-delayed req that's just become ready, 
                         # assume client has a corresponding function call
                         # since that's the only way they can call
                         # regreadfd() to register here
-                        name = cmdName[s.req.ifcall.type][1:]
+                        req = self.deferreq[s]
+                        self.deldeferfd(s)
+                        name = cmdName[req.ifcall.type][1:]
                         try:
                             func = getattr(self.fs, name)
-                            func(req)
+                            func(self, req)
                         except:
                             print >>sys.stderr, "error in delayed response: ", traceback.print_exc()
                             self.respond(req, "error in delayed response")
                             # what a mess! should we be doing this at all?
                             # how do we tell the fileserver that one of its
                             # fds has disappeared?
-                            self.readpool.remove(s)
-                            del s
                         continue
                     try:
                         self.fromnet(self.activesocks[s])
@@ -524,12 +525,21 @@ class Server(object):
         wants to delay responding to a message they can register an fd and
         have it polled for reading. When it's ready, the corresponding 'req'
         will be called'''
-        fd.req = req
+        self.deferreq[fd] = req
         self.readpool.append(fd)
 
-    def delreadfd(self, fd):
-        '''Delete a fd registered with regreadfd() from the read pool'''
-        self.readpool.remove(fd)
+    def regwritefd(self, fd, req):
+        '''Register a file descriptor in the write pool.'''
+        self.deferreq[fd] = req
+        self.writepool.append(fd)
+
+    def deldeferfd(self, fd):
+        '''Delete a fd registered with regreadfd() or regwritefd.'''
+        del self.deferreq[fd]
+        if fd in self.readpool :
+            self.readpool.remove(fd)
+        if fd in self.writepool :
+            self.writepool.remove(fd)
 
     def tversion(self, req):
         if req.ifcall.version[0:2] != '9P': 
