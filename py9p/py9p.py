@@ -48,7 +48,7 @@ Eperm = "permission denied"
 Eunknownfid = "unknown fid"
 Ebaddir = "bad directory in wstat"
 Ewalknotdir = "walk in non-directory"
-Eopen = "fid not open"
+Eopen = "file not open"
 
 NOTAG = 0xffff
 NOFID = 0xffffffffL
@@ -789,7 +789,7 @@ class Server(object):
             return self.respond(req, Eunknownfid)
         if req.fid.omode == -1 :
             return self.respond(req, Eopen)
-        if req.ifcall.count < 0 and req.ifcall.offset < 0:
+        if req.ifcall.count < 0 or req.ifcall.offset < 0:
             return self.respond(req, Ebotch)
         if req.fid.qid.type & QTAUTH and self.authfs:
             self.authfs.write(self, req)
@@ -1089,8 +1089,10 @@ class Client(object):
         ret = []
         if self.walk(pstr) is None:
             return
-        fc = self._stat(self.F)
-        self.close()
+        try:
+            fc = self._stat(self.F)
+        finally:
+            self.close()
         return fc.stat
 
     def lsdir(self):

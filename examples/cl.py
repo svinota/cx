@@ -59,12 +59,12 @@ class CmdClient(py9p.Client):
     def put(self, name, inf=None):
         if inf is None:
             inf = sys.stdin
-        x = self.create(name)
-        if x is None:
-            x = self.open(name, py9p.OWRITE|py9p.OTRUNC)
-            if x is None:
-                return
-        sz = 1024
+        try:
+            self.open(name, py9p.OWRITE|py9p.OTRUNC)
+        except:
+            self.create(name)
+
+        sz = self.msize
         while 1:
             buf = inf.read(sz)
             self.write(buf)
