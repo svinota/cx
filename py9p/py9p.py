@@ -894,7 +894,16 @@ class Client(object):
         if fcall.type == Tversion:
             fcall.tag = NOTAG
         self.msg.send(self.fd, fcall)
-        ifcall = self.msg.recv(self.fd)
+        try :
+            ifcall = self.msg.recv(self.fd)
+        except Exception,e :
+            # try to flush the operation, then rethrow exception
+            if fcall.type != Tflush :
+                try :
+                    self.flush(fcall.tag, fcall.tag+1)
+                except Exception :
+                    pass
+            raise
         if ifcall.tag != fcall.tag:
             raise RpcError("invalid tag received")
         if ifcall.type == Rerror:
@@ -972,6 +981,10 @@ class Client(object):
         fcall = Fcall(Wstat)
         fcall.fid = fid
         fcall.stats = stats
+        return self._rpc(fcall)
+    def _flush(self, tag, oldtag) :
+        fcall = Fcall(Tflush, tag=tag)
+        fcall.oldtag = tag
         return self._rpc(fcall)
 
     def _fullclose(self):
