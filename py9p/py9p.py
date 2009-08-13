@@ -379,7 +379,8 @@ class Server(object):
 
         self.readpool = []
         self.writepool = []
-        self.deferreq = {}
+        self.deferread = {}
+        self.deferwrite = {}
         self.marshal = Marshal9P(dotu=self.dotu, chatty=chatty)
         self.user = user
         self.dom = dom
@@ -403,7 +404,20 @@ class Server(object):
     def serve(self):
         while len(self.readpool) > 0 or len(self.writepool) > 0:
             inr, outr, excr = select.select(self.readpool, self.writepool, [])
-            for s in (inr + outr + excr) :
+            for s in outr :
+                if s in self.deferwrite :
+                    # this is a fs-delayed req that's just become ready, 
+                    req = self.deferwrite[s]
+                    self.unregwritefd(s)
+                    name = cmdName[req.ifcall.type][1:]
+                    try:
+                        func = getattr(self.fs, name)
+                        func(self, req)
+                    except:
+                        print >>sys.stderr, "error in delayed write response: ", traceback.print_exc()
+                        self.respond(req, "error in delayed response")
+                    continue
+            for s in inr :
                 if s == self.sock:
                     cl, addr = s.accept()
                     self.readpool.append(cl)
@@ -411,23 +425,17 @@ class Server(object):
                     if self.chatty:
                         print >>sys.stderr, "accepted connection from: %s" % str(addr)
                 else:
-                    if s in self.deferreq :
+                    if s in self.deferread :
                         # this is a fs-delayed req that's just become ready, 
-                        # assume client has a corresponding function call
-                        # since that's the only way they can call
-                        # regreadfd() to register here
-                        req = self.deferreq[s]
-                        self.deldeferfd(s)
+                        req = self.deferread[s]
+                        self.unregreadfd(s)
                         name = cmdName[req.ifcall.type][1:]
                         try:
                             func = getattr(self.fs, name)
                             func(self, req)
                         except:
-                            print >>sys.stderr, "error in delayed response: ", traceback.print_exc()
+                            print >>sys.stderr, "error in delayed read response: ", traceback.print_exc()
                             self.respond(req, "error in delayed response")
-                            # what a mess! should we be doing this at all?
-                            # how do we tell the fileserver that one of its
-                            # fds has disappeared?
                         continue
                     try:
                         self.fromnet(self.activesocks[s])
@@ -477,15 +485,15 @@ class Server(object):
         except socket.error, e:
             if self.chatty:
                 print >>sys.stderr, "socket error: " + e.args[1]
-            self.readpool.remove(s)
+            self.readpool.remove(req.sock)
         except EofError, e:
             if self.chatty:
                 print >>sys.stderr, "socket closed: " + e.args[0]
-            self.readpool.remove(s)
+            self.readpool.remove(req.sock)
         except Exception, e:
             if self.chatty:
                 print >>sys.stderr, "socket error: " + e.args[1]
-            self.readpool.remove(s)
+            self.readpool.remove(req.sock)
 
         # XXX: unsure whether we need proper flushing semantics from rsc's p9p
         # thing is, we're not threaded.
@@ -525,21 +533,23 @@ class Server(object):
         wants to delay responding to a message they can register an fd and
         have it polled for reading. When it's ready, the corresponding 'req'
         will be called'''
-        self.deferreq[fd] = req
+        self.deferread[fd] = req
         self.readpool.append(fd)
 
     def regwritefd(self, fd, req):
         '''Register a file descriptor in the write pool.'''
-        self.deferreq[fd] = req
+        self.deferwrite[fd] = req
         self.writepool.append(fd)
 
-    def deldeferfd(self, fd):
-        '''Delete a fd registered with regreadfd() or regwritefd.'''
-        del self.deferreq[fd]
-        if fd in self.readpool :
-            self.readpool.remove(fd)
-        if fd in self.writepool :
-            self.writepool.remove(fd)
+    def unregreadfd(self, fd):
+        '''Delete a fd registered with regreadfd().'''
+        del self.deferread[fd]
+        self.readpool.remove(fd)
+
+    def unregwritefd(self, fd):
+        '''Delete a fd registered with regwritefd().'''
+        del self.deferwrite[fd]
+        self.writepool.remove(fd)
 
     def tversion(self, req):
         if req.ifcall.version[0:2] != '9P': 
