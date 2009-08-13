@@ -1146,9 +1146,9 @@ class Client(object):
                         self.open(x)
                         lsd = self.lsdir()
                         if long:
-                            ret += [z.tolstr(x) for x in lsd]
+                            ret += [z.tolstr() for z in lsd]
                         else:
-                            ret += [x + '/' + z.name for x in lsd]
+                            ret += [x + '/' + z.name for z in lsd]
                         self.close()
                     else:
                         if long:
