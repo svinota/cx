@@ -48,6 +48,8 @@ class Marshal(object):
         "Encode opaque data"
         self.bytes += list(x)
     def decX(self, l):
+        if len(self.bytes) < l :
+            raise py9p.Error("buffer exhausted")
         x = "".join(self.bytes[:l])
         #del self.bytes[:l]
         self.bytes[:l] = [] # significant speedup

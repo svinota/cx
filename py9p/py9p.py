@@ -3,6 +3,7 @@
 9P protocol implementation as documented in plan9 intro(5) and <fcall.h>.
 """
 
+import os
 import os.path 
 import sys
 import socket
@@ -241,6 +242,9 @@ class Qid(object):
         self.type = type
         self.vers = vers
         self.path = path
+    def __str__(self) :
+        return '(%x,%x,%x)' % (self.type, self.vers, self.path)
+    __repr__ = __str__
 
 class Fid(object):
     def __init__(self, pool, fid, path='', auth=0):
@@ -388,9 +392,17 @@ class Server(object):
         self.port = listen[1]
         self.chatty = chatty
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.sock.bind((self.host, self.port),)
+        if self.host[0] == '/' :
+            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try :
+                os.unlink(self.host)
+            except OSError :
+                pass
+            self.sock.bind(self.host)
+        else :
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.sock.bind((self.host, self.port),)
         self.sock.listen(5)
         self.readpool.append(self.sock)
         if self.chatty:
