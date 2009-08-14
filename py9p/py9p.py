@@ -627,7 +627,7 @@ class Server(object):
 
     def tflush(self, req):
         if hasattr(self.fs, 'flush'):
-            self.fs.flush(srv, req)
+            self.fs.flush(self, req)
         else:
             req.sock.reqs = []
             self.respond(req, None)
@@ -896,11 +896,11 @@ class Client(object):
         self.msg.send(self.fd, fcall)
         try :
             ifcall = self.msg.recv(self.fd)
-        except Exception,e :
+        except (KeyboardInterrupt,Exception),e :
             # try to flush the operation, then rethrow exception
             if fcall.type != Tflush :
                 try :
-                    self.flush(fcall.tag, fcall.tag+1)
+                    self._flush(fcall.tag, fcall.tag+1)
                 except Exception :
                     pass
             raise
