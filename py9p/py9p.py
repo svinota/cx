@@ -576,6 +576,7 @@ class Server(object):
         if req.ifcall.version == '9P2000':
             req.ofcall.version = '9P2000'
             self.dotu = False
+        self.marshal.dotu = self.dotu
         req.ofcall.msize = req.ifcall.msize
         self.respond(req, None)
 
