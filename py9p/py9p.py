@@ -101,6 +101,8 @@ DMREAD      =0x4     # mode bit for read permission
 DMWRITE     =0x2     # mode bit for write permission 
 DMEXEC      =0x1     # mode bit for execute permission 
 
+ERRUNDEF    =0xFFFFFFFF
+
 # supported authentication protocols
 auths = ['pki', 'sk1']
 
@@ -476,7 +478,7 @@ class Server(object):
 
         return
 
-    def respond(self, req, error=None):
+    def respond(self, req, error=None, errornum=None):
         name = 'r' + cmdName[req.ifcall.type][1:]
         if hasattr(self, name):
             func = getattr(self, name)
@@ -492,6 +494,10 @@ class Server(object):
         if error:
             req.ofcall.type = Rerror
             req.ofcall.ename = error
+            if self.dotu:
+                if not errornum:
+                    errornum = ERRUNDEF
+                req.ofcall.errornum = errornum
         try:
             self.marshal.send(req.sock, req.ofcall)
         except socket.error, e:
@@ -504,7 +510,7 @@ class Server(object):
             self.readpool.remove(req.sock)
         except Exception, e:
             if self.chatty:
-                print >>sys.stderr, "socket error: " + e.args[1]
+                print >>sys.stderr, "socket error: " + e.args[0]
             self.readpool.remove(req.sock)
 
         # XXX: unsure whether we need proper flushing semantics from rsc's p9p
@@ -531,7 +537,10 @@ class Server(object):
             except Error, e:
                 if self.chatty:
                     print >>sys.stderr, traceback.print_exc()
-                self.respond(req, 'server error:' + str(e.args[0]))
+                if self.dotu:
+                    self.respond(req, 'server error:' + str(e.args[0][1]), e.args[0][0])
+                else:
+                    self.respond(req, 'server error:' + str(e.args[0][1]))
             except Exception, e:
                 if self.chatty:
                     print >>sys.stderr, traceback.print_exc()
