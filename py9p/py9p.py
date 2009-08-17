@@ -171,7 +171,10 @@ class Sock(object):
         self.fids = {}  # fids are per client
         self.reqs = {}  # reqs are per client
         self.uname = None
+        self.closing = False
     def read(self, l):
+        if self.closing :
+            return ""
         x = self.sock.recv(l)
         while len(x) < l:
             b = self.sock.recv(l - len(x))
@@ -180,6 +183,8 @@ class Sock(object):
             x += b
         return x
     def write(self, buf):
+        if self.closing :
+            return len(buf)
         if self.sock.send(buf) != len(buf):
             raise Error("short write")
     def fileno(self):
@@ -413,6 +418,48 @@ class Server(object):
         # handle different filesystems at walk time
         self.fs = fs
 
+    def shutdown(self, sock) :
+        """Close down a connection."""
+        if sock not in self.activesocks :
+            return
+        s = self.activesocks[sock]
+        assert not s.closing # we looped!
+        s.closing = True
+
+        if sock in self.readpool :
+            self.readpool.delete(sock)
+        if sock in self.writepool :
+            self.writeopol.delete(sock)
+
+        # find first tag not in use
+        tags = [r.ifcall.tag for r in s.reqs]
+        tag = (n for n in xrange(1,65536) if n not in tags).next()
+
+        # flush all outstanding requests
+        for r in s.reqs :
+            req = Req(tag)
+            req.ifcall = Fcall(Tflush, tag=tag, oldtag=r.ifcall.tag)
+            req.ofcall = Fcall(Rflush, tag=tag)
+            req.fd = s.fileno()
+            req.sock = s
+            self.tflush(req)
+
+        # clunk all open fids
+        fids = list(s.fids.keys())
+        for fid in fids :
+            req = Req(tag)
+            req.ifcall = Fcall(Tclunk, tag=tag, fid=fid)
+            req.ofcall = Fcall(Rclunk, tag=tag)
+            req.fd = s.fileno()
+            req.sock = s
+            self.tclunk(req)
+
+        # flush should have taken care of this
+        assert sock not in self.deferwrite and sock not in self.deferread
+
+        sock.close()
+        del self.activesocks[sock]
+
     def serve(self):
         while len(self.readpool) > 0 or len(self.writepool) > 0:
             inr, outr, excr = select.select(self.readpool, self.writepool, [])
@@ -454,22 +501,16 @@ class Server(object):
                     except socket.error, e:
                         if self.chatty:
                             print >>sys.stderr, "socket error: " + e.args[1]
-                        self.readpool.remove(s)
-                        del self.activesocks[s]
+                        self.shutdown(s)
                     except EofError, e:
                         if self.chatty:
                             print >>sys.stderr, "socket closed: " + e.args[0]
                         self.readpool.remove(s)
-                        s.close()
-                        del self.activesocks[s]
-                        del s
+                        self.shutdown(s)
                     except Exception, e:
                         print >>sys.stderr, "error in fromnet (protocol botch?)\n", traceback.print_exc()
                         print >>sys.stderr, "dropping connection..."
-                        self.readpool.remove(s)
-                        s.close()
-                        del self.activesocks[s]
-                        del s
+                        self.shutdown(s)
 
         if self.chatty:
             print >>sys.stderr, "main socket closed"
@@ -497,15 +538,15 @@ class Server(object):
         except socket.error, e:
             if self.chatty:
                 print >>sys.stderr, "socket error: " + e.args[1]
-            self.readpool.remove(req.sock)
+            self.shutdown(s)
         except EofError, e:
             if self.chatty:
                 print >>sys.stderr, "socket closed: " + e.args[0]
-            self.readpool.remove(req.sock)
+            self.shutdown(s)
         except Exception, e:
             if self.chatty:
                 print >>sys.stderr, "socket error: " + e.args[1]
-            self.readpool.remove(req.sock)
+            self.shutdown(s)
 
         # XXX: unsure whether we need proper flushing semantics from rsc's p9p
         # thing is, we're not threaded.
