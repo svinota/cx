@@ -533,8 +533,9 @@ class Server(object):
         if error:
             req.ofcall.type = Rerror
             req.ofcall.ename = error
+        s = req.sock
         try:
-            self.marshal.send(req.sock, req.ofcall)
+            self.marshal.send(s, req.ofcall)
         except socket.error, e:
             if self.chatty:
                 print >>sys.stderr, "socket error: " + e.args[1]
@@ -545,7 +546,7 @@ class Server(object):
             self.shutdown(s)
         except Exception, e:
             if self.chatty:
-                print >>sys.stderr, "socket error: " + e.args[1]
+                print >>sys.stderr, "socket error: " + str(e.args)
             self.shutdown(s)
 
         # XXX: unsure whether we need proper flushing semantics from rsc's p9p
