@@ -620,12 +620,20 @@ class Server(object):
             return
 
         if req.ifcall.version == '9P2000.u':
-            req.ofcall.version = '9P2000.u'
-            self.dotu = True
-
-        if req.ifcall.version == '9P2000':
+            # dotu is passed to server init to indicate whether dotu will be supported
+            # if the server init code was told not to implement dotu then even if the 
+            # remote wants dotu we must fall back to 9P2000
+            if self.dotu:
+                req.ofcall.version = '9P2000.u'
+            else:
+                req.ofcall.version = '9P2000'
+        else:
+            # if somebody requested a later version of the protocol (9Pxxxx.y, for xxxx>2000) 
+            # then fall back to what we know best: 9P2000;
+            # if somebody requested 9Pxxxx for xxxx<2000 then we have no clue what to say 
+            # and we just keep repeating the same.
             req.ofcall.version = '9P2000'
-            self.dotu = False
+
         self.marshal.dotu = self.dotu
         req.ofcall.msize = req.ifcall.msize
         self.respond(req, None)
