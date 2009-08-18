@@ -427,9 +427,9 @@ class Server(object):
         s.closing = True
 
         if sock in self.readpool :
-            self.readpool.delete(sock)
+            self.readpool.remove(sock)
         if sock in self.writepool :
-            self.writeopol.delete(sock)
+            self.writepool.remove(sock)
 
         # find first tag not in use
         tags = [r.ifcall.tag for r in s.reqs]
