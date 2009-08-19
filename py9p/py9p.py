@@ -533,6 +533,7 @@ class Server(object):
         if error:
             req.ofcall.type = Rerror
             req.ofcall.ename = error
+            req.ofcall.errno = 0
         s = req.sock
         try:
             self.marshal.send(s, req.ofcall)

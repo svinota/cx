@@ -201,6 +201,8 @@ class Marshal9P(Marshal):
             self.encQ(fcall.aqid)
         elif fcall.type == py9p.Rerror:
             self.encS(fcall.ename)
+            if self.dotu :
+                self.enc4(fcall.errno)
         elif fcall.type == py9p.Tflush:
             self.enc2(fcall.oldtag)
         elif fcall.type == py9p.Tattach:
@@ -300,6 +302,8 @@ class Marshal9P(Marshal):
             fcall.aqid = self.decQ()
         elif fcall.type == py9p.Rerror:
             fcall.ename = self.decS()
+            if self.dotu :
+                fcall.errno = self.dec4()
         elif fcall.type == py9p.Tflush:
             fcall.oldtag = self.dec2()
         elif fcall.type == py9p.Tattach:
