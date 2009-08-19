@@ -15,9 +15,9 @@ def _os(func, *args):
     try:
         return func(*args)
     except OSError,e:
-        raise py9p.ServerError(e.args[1])
+        raise py9p.ServerError(e.args)
     except IOError,e:
-        raise py9p.ServerError(e.args[1])
+        raise py9p.ServerError(e.args)
 
 def _nf(func, *args):
     try:
