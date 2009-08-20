@@ -228,7 +228,7 @@ class Fcall(object):
     stat        # Twstat, Rstat
 
     # dotu extensions:
-    errornum    # Rerror
+    errno       # Rerror
     extension   # Tcreate
     '''    
     def __init__(self, type, tag=1, fid=None):
@@ -519,7 +519,7 @@ class Server(object):
 
         return
 
-    def respond(self, req, error=None, errornum=None):
+    def respond(self, req, error=None, errno=None):
         name = 'r' + cmdName[req.ifcall.type][1:]
         if hasattr(self, name):
             func = getattr(self, name)
@@ -536,9 +536,9 @@ class Server(object):
             req.ofcall.type = Rerror
             req.ofcall.ename = error
             if self.dotu:
-                if not errornum:
-                    errornum = ERRUNDEF
-                req.ofcall.errornum = errornum
+                if not errno:
+                    errno = ERRUNDEF
+                req.ofcall.errno = errno
         s = req.sock
         try:
             self.marshal.send(s, req.ofcall)
