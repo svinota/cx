@@ -102,6 +102,7 @@ DMWRITE     =0x2     # mode bit for write permission
 DMEXEC      =0x1     # mode bit for execute permission 
 
 ERRUNDEF    =0xFFFFFFFF
+UIDUNDEF    =0xFFFFFFFF
 
 # supported authentication protocols
 auths = ['pki', 'sk1']
@@ -167,13 +168,19 @@ def hasperm(f, uid, p):
     return 0
 
 class Sock(object):
-    """Provide appropriate read and write methods for the Marshaller"""
-    def __init__(self, sock):
+    """Per-connection state and appropriate read and write methods
+    for the Marshaller."""
+    def __init__(self, sock, dotu=0, chatty=0):
         self.sock = sock
         self.fids = {}  # fids are per client
         self.reqs = {}  # reqs are per client
         self.uname = None
         self.closing = False
+        self.marshal = Marshal9P(dotu=dotu, chatty=chatty)
+    def send(self, x) :
+        self.marshal.send(self, x)
+    def recv(self) :
+        return self.marshal.recv(self)
     def read(self, l):
         if self.closing :
             return ""
@@ -310,6 +317,12 @@ class Dir(object):
                     self.uidnum,
                     self.gidnum,
                     self.muidnum) = args[11:15]
+            else :
+                (self.extension,
+                    self.uidnum,
+                    self.gidnum,
+                    self.muidnum) = "", UIDUNDEF, UIDUNDEF, UIDUNDEF
+                
 
     def tolstr(self, dirname=''):
         if dirname != '':
@@ -319,34 +332,33 @@ class Dir(object):
         else:
             return "%s %s %s %-8d\t\t%s" % (modetostr(self.mode), self.uid, self.gid, self.length, dirname+self.name)
 
-    def todata(self):
+    def todata(self, marsh):
         '''This circumvents a leftower from the original 9P python implementation.
         Why do enc functions have to hide data in "bytes"? I don't know'''
 
-        n = Marshal9P(dotu=self.dotu)
-        n.setBuf()
-        if self.dotu:
+        marsh.setBuf()
+        if marsh.dotu:
             size = 2+4+13+4+4+4+8+len(self.name)+len(self.uid)+len(self.gid)+len(self.muid)+2+2+2+2+len(self.extension)+2+4+4+4
         else:
             size = 2+4+13+4+4+4+8+len(self.name)+len(self.uid)+len(self.gid)+len(self.muid)+2+2+2+2
-        n.enc2(size)
-        n.enc2(self.type)
-        n.enc4(self.dev)
-        n.encQ(self.qid)
-        n.enc4(self.mode)
-        n.enc4(self.atime)
-        n.enc4(self.mtime)
-        n.enc8(self.length)
-        n.encS(self.name)
-        n.encS(self.uid)
-        n.encS(self.gid)
-        n.encS(self.muid)
-        if self.dotu:
-            n.encS(self.extension)
-            n.enc4(self.uidnum)
-            n.enc4(self.gidnum)
-            n.enc4(self.muidnum)
-        return n.bytes
+        marsh.enc2(size)
+        marsh.enc2(self.type)
+        marsh.enc4(self.dev)
+        marsh.encQ(self.qid)
+        marsh.enc4(self.mode)
+        marsh.enc4(self.atime)
+        marsh.enc4(self.mtime)
+        marsh.enc8(self.length)
+        marsh.encS(self.name)
+        marsh.encS(self.uid)
+        marsh.encS(self.gid)
+        marsh.encS(self.muid)
+        if marsh.dotu:
+            marsh.encS(self.extension)
+            marsh.enc4(self.uidnum)
+            marsh.enc4(self.gidnum)
+            marsh.enc4(self.muidnum)
+        return marsh.bytes
 
 class Req(object):
     def __init__(self, tag, fd = None, ifcall=None, ofcall=None, dir=None, oldreq=None,
@@ -392,7 +404,6 @@ class Server(object):
         self.writepool = []
         self.deferread = {}
         self.deferwrite = {}
-        self.marshal = Marshal9P(dotu=self.dotu, chatty=chatty)
         self.user = user
         self.dom = dom
         self.host = listen[0]
@@ -482,7 +493,7 @@ class Server(object):
                 if s == self.sock:
                     cl, addr = s.accept()
                     self.readpool.append(cl)
-                    self.activesocks[cl] = Sock(cl)
+                    self.activesocks[cl] = Sock(cl, self.dotu, self.chatty)
                     if self.chatty:
                         print >>sys.stderr, "accepted connection from: %s" % str(addr)
                 else:
@@ -535,13 +546,12 @@ class Server(object):
         if error:
             req.ofcall.type = Rerror
             req.ofcall.ename = error
-            if self.dotu:
-                if not errno:
-                    errno = ERRUNDEF
-                req.ofcall.errno = errno
+            if not errno:
+                errno = ERRUNDEF
+            req.ofcall.errno = errno
         s = req.sock
         try:
-            self.marshal.send(s, req.ofcall)
+            s.send(req.ofcall)
         except socket.error, e:
             if self.chatty:
                 print >>sys.stderr, "socket error: " + e.args[1]
@@ -561,7 +571,7 @@ class Server(object):
 
 
     def fromnet(self, fd):
-        fcall = self.marshal.recv(fd)
+        fcall = fd.recv()
         req = Req(fcall.tag)
         req.ifcall = fcall
         req.ofcall = Fcall(fcall.type+1, fcall.tag)
@@ -579,10 +589,7 @@ class Server(object):
             except Error, e:
                 if self.chatty:
                     print >>sys.stderr, traceback.print_exc()
-                if self.dotu:
-                    self.respond(req, 'server error:' + str(e.args[0][1]), e.args[0][0])
-                else:
-                    self.respond(req, 'server error:' + str(e.args[0][1]))
+                self.respond(req, 'server error:' + str(e.args[0][1]), e.args[0][0])
             except Exception, e:
                 if self.chatty:
                     print >>sys.stderr, traceback.print_exc()
@@ -634,8 +641,8 @@ class Server(object):
             # if somebody requested 9Pxxxx for xxxx<2000 then we have no clue what to say 
             # and we just keep repeating the same.
             req.ofcall.version = '9P2000'
+            req.sock.marshal.dotu = 0
 
-        self.marshal.dotu = self.dotu
         req.ofcall.msize = req.ifcall.msize
         self.respond(req, None)
 
@@ -857,7 +864,7 @@ class Server(object):
         if req.fid.qid.type & QTDIR:
             data = []
             for x in req.ofcall.stat:
-                ndata = x.todata()
+                ndata = x.todata(req.sock.marshal)
                 if (len(data)-req.ifcall.offset) + len(ndata) < req.ifcall.count:
                     data = data + ndata
                 else:
@@ -952,12 +959,12 @@ class Client(object):
 
     path = '' # for 'getwd' equivalent
     chatty = 0
-    msg = None
     msize = 8192
 
     def __init__(self, fd, authmode=None, user=None, passwd=None, authsrv=None, chatty=0, key=None):
         self.authmode = authmode
-        self.msg = Marshal9P(dotu=0, chatty=chatty)
+        fd.dotu = 0
+        fd.chatty = chatty
         self.fd = fd
         self.chatty = chatty
         self.login(user, passwd, authsrv, key)
@@ -965,9 +972,9 @@ class Client(object):
     def _rpc(self, fcall):
         if fcall.type == Tversion:
             fcall.tag = NOTAG
-        self.msg.send(self.fd, fcall)
+        self.fd.send(fcall)
         try :
-            ifcall = self.msg.recv(self.fd)
+            ifcall = self.fd.recv()
         except (KeyboardInterrupt,Exception),e :
             # try to flush the operation, then rethrow exception
             if fcall.type != Tflush :
