@@ -242,6 +242,7 @@ class Fcall(object):
         self.type = type
         self.fid = fid
         self.tag = tag
+
     def tostr(self):
         attr = [x for x in dir(self) if not x.startswith('_') and not x.startswith('tostr')]
 
@@ -456,6 +457,9 @@ class Server(object):
             req.fd = s.fileno()
             req.sock = s
             self.tflush(req)
+            del req.ifcall
+            del req.ofcall
+            del req
 
         # clunk all open fids
         fids = list(s.fids.keys())
@@ -466,6 +470,9 @@ class Server(object):
             req.fd = s.fileno()
             req.sock = s
             self.tclunk(req)
+            del req.ifcall
+            del req.ofcall
+            del req
 
         # flush should have taken care of this
         assert sock not in self.deferwrite and sock not in self.deferread
@@ -596,6 +603,10 @@ class Server(object):
                 self.respond(req, 'unhandled internal exception: ' + str(e.args[0]))
         else:
             self.respond(req, "unhandled message: %s" % (cmdName[req.ifcall.type]))
+
+        del req.ifcall
+        del req.ofcall
+        del req
         return
 
     def regreadfd(self, fd, req):
