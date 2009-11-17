@@ -1074,7 +1074,7 @@ class Client(object):
     def login(self, user, passwd, authsrv, key=None):
         fcall = self._version(8 * 1024, version)
         if fcall.version != version:
-            raise ClientError("version mismatch: %r" % req.version)
+            raise ClientError("version mismatch: %r" % fcall.version)
 
         fcall.afid = self.AFID
         try:
