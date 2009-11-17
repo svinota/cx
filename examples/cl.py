@@ -343,7 +343,7 @@ def main():
     if authmode == 'sk1' and passwd is None:
         passwd = getpass.getpass()
     try:
-        cl = CmdClient(py9p.Sock(sock), authmode, user, passwd, authsrv, chatty, key=privkey)
+        cl = CmdClient(py9p.Sock(sock, 0, chatty), authmode, user, passwd, authsrv, chatty, key=privkey)
         readline.set_completer(cl.completer)
         cl.cmdLoop(cmd)
     except py9p.Error,e:
