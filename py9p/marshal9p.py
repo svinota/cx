@@ -284,8 +284,8 @@ class Marshal9P(Marshal):
                 stat.gidnum = self.dec4()
                 stat.muidnum = self.dec4()
             fcall.stat.append(stat)
-            self.bytes = b
-            self.bytes[0:size] = []
+            self.bytes = b[size:]
+            #self.bytes[0:size] = []
 
 
     def dec(self, fcall):
