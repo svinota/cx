@@ -282,7 +282,7 @@ def main():
 
     port = py9p.PORT
     listen = '0.0.0.0'
-    root = '/tmp'
+    root = '/'
     mods = []
     user = None
     noauth = 0
