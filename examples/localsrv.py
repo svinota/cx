@@ -67,7 +67,7 @@ class LocalFs(object):
         if stat.S_ISDIR(s.st_mode):
             type = type | py9p.QTDIR
             res = res | py9p.DMDIR
-        qid = py9p.Qid(type, 0, py9p.hash8(os.path.basename(f)))
+        qid = py9p.Qid(type, 0, py9p.hash8(f))
         if self.dotu:
             if stat.S_ISLNK(s.st_mode):
                 ext = os.readlink(f)
