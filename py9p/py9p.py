@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 """
 9P protocol implementation as documented in plan9 intro(5) and <fcall.h>.
 """
