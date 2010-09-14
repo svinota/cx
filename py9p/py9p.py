@@ -920,6 +920,7 @@ class Server(object):
             self.respond(req, Enoremove)
 
     def rremove(self, req, error):
+        req.sock.delfid(req.ifcall.fid)
         return
 
     def tstat(self, req):
