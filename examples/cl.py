@@ -7,6 +7,7 @@ import getpass
 import code
 import readline
 import atexit
+import fnmatch
 
 import py9p
 

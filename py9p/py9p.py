@@ -1164,9 +1164,7 @@ class Client(object):
         try:
             self._remove(self.F)
         except RpcError, e:
-            self.close()
             raise
-        self.close()
 
     def read(self, l):
         try:
