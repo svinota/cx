@@ -228,7 +228,8 @@ def nl_parse(msg):
     elif \
         t <= RTM_DELADDR:
         r["type"] = "address"
-        r["mask"] = msg.data.address.prefixlen
+        m = ( 0xffffffff << ( 32 - msg.data.address.prefixlen ) ) & 0xffffffff
+        r["mask"] = "%i.%i.%i.%i" % tuple(reversed([ (m >> (8*x)) & 0xff for x in range(4) ])) 
         bias = ifaddrmsg
         at = t_ifa_attr
     else:
