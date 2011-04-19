@@ -338,7 +338,10 @@ def nlconfig():
     nl_send(s,msg)
 
     # map addrs to devices
-    [ (ret[x['dev']].__setitem__("addr",x['local']),ret[x['dev']].__setitem__("netmask",x['mask'])) for x in nl_get(s) if x['type'] == 'address' ]
+    result = nl_get(s)
+    # emulate alias interfaces
+    [ ret.__setitem__(x,ret[x[:x.find(":")]]) for x in [ y["dev"] for y in result if y.has_key("dev")] if x.find(":") > -1 ]
+    [ (ret[x['dev']].__setitem__("addr",x['local']),ret[x['dev']].__setitem__("netmask",x['mask'])) for x in result if x['type'] == 'address' ]
     return ret
 
 if __name__ == "__main__":
