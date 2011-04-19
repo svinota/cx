@@ -2,7 +2,8 @@
 """
 Extra light, simple and fast library to acquire interfaces and addresses
 via RT Netlink protocol. It is simplified up to the edge to fit partial
-requirements.
+requirements. Also, it has all the limitations that ifconfig does --
+due to output data format restrictions.
 
 To get full version of the library, use master branch of the main git
 repository at git://projects.radlinux.org/cx/
@@ -10,9 +11,8 @@ repository at git://projects.radlinux.org/cx/
 
 from ctypes import CDLL, Structure, Union
 from ctypes import string_at, create_string_buffer, sizeof, addressof, byref
-from ctypes import c_byte, c_ubyte, c_ushort, c_int, c_uint8, c_uint16, c_uint32, c_uint64
+from ctypes import c_byte, c_ubyte, c_ushort, c_int, c_uint8, c_uint16, c_uint32
 from socket import AF_NETLINK, SOCK_RAW
-from sys import maxint
 
 __all__ = [ "nlconfig" ]
 
@@ -337,11 +337,25 @@ def nlconfig():
     msg.hdr.type = RTM_GETADDR
     nl_send(s,msg)
 
-    # map addrs to devices
+    # get addrs
     result = nl_get(s)
-    # emulate alias interfaces
-    [ ret.__setitem__(x,ret[x[:x.find(":")]]) for x in [ y["dev"] for y in result if y.has_key("dev")] if x.find(":") > -1 ]
-    [ (ret[x['dev']].__setitem__("addr",x['local']),ret[x['dev']].__setitem__("netmask",x['mask'])) for x in result if x['type'] == 'address' ]
+    # emulate "alias interfaces" *)
+    [ ret.__setitem__(x,ret[x[:x.find(":")]]) for x in 
+        [ y["dev"] for y in result if y.has_key("dev")] if x.find(":") > -1 ]
+    # put addresses by interfaces (and aliases)
+    [ (
+        ret[x['dev']].__setitem__("addr",x['local']),
+        ret[x['dev']].__setitem__("netmask",x['mask'])
+      ) for x in
+        result if x['type'] == 'address' ]
+
+    #
+    # *) actually, "alias interfaces" model is deprecated
+    # in the Linux kernel together with ifconfig and ioctl()
+    # usage for network configuration
+    #
+
+    libc.close(s)
     return ret
 
 if __name__ == "__main__":
