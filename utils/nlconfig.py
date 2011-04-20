@@ -208,7 +208,7 @@ def t_l2ad(address):
     Parse MAC address attribute
     """
     r = (c_uint8 * 6).from_address(address + sizeof(nlattr))
-    return "%x:%x:%x:%x:%x:%x" % (r[0], r[1], r[2], r[3], r[4], r[5])
+    return "%02X:%02X:%02X:%02X:%02X:%02X" % (r[0], r[1], r[2], r[3], r[4], r[5])
 def t_asciiz(address):
     """
     Parse a zero-terminated string
