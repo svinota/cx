@@ -6,7 +6,32 @@ requirements. Also, it has all the limitations that ifconfig does --
 due to output data format restrictions.
 
 To get full version of the library, use master branch of the main git
-repository at git://projects.radlinux.org/cx/
+repository at git://projects.radlinux.org/cx/ (cxnet.netlink.iproute2)
+
+This module exports only one routine, nlconfig(), which takes no
+parameters. The routine opens a Netlink socket for NETLINK_ROUTE family,
+dumps links and interfaces data and builds a dictionary in the format:
+
+{
+    "<iface[:alias]>": {
+        "hwaddr": "xx:xx:xx:xx:xx:xx",
+        "addr": "xxx.xxx.xxx.xxx",
+        "netmask": "xxx.xxx.xxx.xxx"
+    },
+    ...
+}
+
+Please note that there can be only one Netlink socket opened for each
+Netlink family by a process at one time. So, in multithreading
+environment nlconfig() calls must be protected by mutexes or any
+other synchronization primitives.
+
+Limitations:
+
+ * IPv4 only (for this version)
+ * returns only one address for an interface - format restriction
+ * returns netmask in dotted quad notation - format restriction
+
 """
 
 from ctypes import CDLL, Structure, Union
@@ -302,6 +327,9 @@ def nlconfig():
     """
     Extra light RT netlink client.
     For speed, it uses ctypes data representation instead of pack/unpack
+
+    links and interfaces data
+
     """
 
     ret = {}
@@ -332,6 +360,9 @@ def nlconfig():
     [ ret.__setitem__(x['dev'],x) for x in nl_get(s) if x.has_key('dev') ]
     # clean up
     [ (ret[x].__delitem__('dev'),ret[x].__delitem__('type')) for x in ret.keys() ]
+    # fix hwaddr for loopback: the original ifconfig returns an empty string
+    if ret.has_key("lo"):
+        ret["lo"]["hwaddr"] = ""
 
     # ask for all addrs
     msg.hdr.type = RTM_GETADDR
