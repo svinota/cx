@@ -7,7 +7,7 @@ Group: Development/Python
 URL: http://projects.radlinux.org/cx/
 BuildArch: noarch
 
-Source: cx.tar
+Source: %name-%version.tar
 
 %description
 As for version 0.7.0, Connexion project is a set of libraries
@@ -19,7 +19,7 @@ Summary: Network protocol implementations for Connexion project
 Group: Development/Python
 BuildArch: noarch
 
-%description
+%description network
 Network protocol implementations for Connexion project can be used
 by any Python program. This package includes:
 
@@ -55,3 +55,5 @@ rm -rf $RPM_BUILD_ROOT
 %{python_sitelibdir}/cxnet*
 
 %changelog
+* Sun May 29 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt1
+- RPM prepared.
