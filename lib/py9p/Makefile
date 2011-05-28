@@ -1,4 +1,4 @@
-# 	Copyright (c) 2011 Peter V. Saveliev
+# 	Copyright (c) 2008-2011 Peter V. Saveliev
 #
 # 	This file is part of Connexion project.
 #
@@ -16,19 +16,27 @@
 # 	along with Connexion; if not, write to the Free Software
 # 	Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-ifdef python
-	override python := "python=${python}"
-endif
 ifdef root
-	override root := "root=${root}"
-endif
-ifdef lib
-	override lib := "lib=${lib}"
+	override root := "--root=${root}"
 endif
 
-build:
-	@for i in `find .  -maxdepth 1 -mindepth 1 -type d ! -name '.*'`; do [ ! -e $$i/build-disabled ] && make -C $$i build ${root} ${lib} ${python} || echo "$$i disabled"; done
-install:
-	@for i in `find .  -maxdepth 1 -mindepth 1 -type d ! -name '.*'`; do [ ! -e $$i/build-disabled ] && make -C $$i install ${root} ${lib} ${python} || echo "$$i disabled"; done
+ifdef lib
+	override lib := "--install-lib=${lib}"
+endif
+
+
+all:
+	@echo targets: dist, install
+
 clean:
-	@for i in `find .  -maxdepth 1 -mindepth 1 -type d ! -name '.*'`; do [ ! -e $$i/build-disabled ] && make -C $$i clean ${root} ${lib} ${python} || echo "$$i disabled"; done
+	rm -rf dist build MANIFEST
+	find . -name "*pyc" -exec rm -f "{}" \;
+
+manifest: clean
+	find . ! -name setup.py -a ! -name Makefile -a ! -wholename '*.svn*' -a ! -name 'dump' >MANIFEST
+
+dist: manifest
+	python setup.py sdist
+
+install: manifest
+	python setup.py install ${root} ${lib}
