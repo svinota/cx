@@ -1,3 +1,5 @@
+%define pprefix python-module
+
 Name: connexion
 Version: 0.7.1
 Release: alt1
@@ -5,7 +7,12 @@ Summary: Python framework to build network-centric systems
 License: GPLv3
 Group: Development/Python
 URL: http://projects.radlinux.org/cx/
+
 BuildArch: noarch
+BuildPreReq: python-devel rpm-build-python
+
+Requires: %{pprefix}-cxnet = %version-%release
+Requires: %{pprefix}-py9p  = %version-%release
 
 Source: %name-%version.tar
 
@@ -14,12 +21,15 @@ As for version 0.7.0, Connexion project is a set of libraries
 intended to build network-centric systems. It includes implementations
 of several transport and application layer protocols.
 
-%package network
+This is a meta-package, that install all related packages.
+
+%package -n %{pprefix}-cxnet
 Summary: Network protocol implementations for Connexion project
 Group: Development/Python
+License: GPLv3
 BuildArch: noarch
 
-%description network
+%description -n %{pprefix}-cxnet
 Network protocol implementations for Connexion project can be used
 by any Python program. This package includes:
 
@@ -39,20 +49,30 @@ Common definitions of packet structures (in ctypes):
 * IPv4
 * TCP
 
+%package -n %{pprefix}-py9p
+Summary: Pure Python implementation of 9P protocol (Plan9)
+Group: Development/Python
+License: MIT
+BuildArch: noarch
+
+%description -n %{pprefix}-py9p
+Protocol 9P is developed for Plan9 operating system from Bell Labs.
+It is used for remote file access, and since files are key objects
+in Plan9, 9P can be used also for composite file access, RPC etc.
+
 %prep
 %setup
 
-%build
-%make_build python=%{__python}
-
 %install
-rm -rf $RPM_BUILD_ROOT
-%make_install python=%{__python}
+%makeinstall python=%{__python} root=%buildroot lib=%{python_sitelibdir}
 
 %files
 
-%files network
+%files -n %{pprefix}-cxnet
 %{python_sitelibdir}/cxnet*
+
+%files -n %{pprefix}-py9p
+%{python_sitelibdir}/py9p*
 
 %changelog
 * Sun May 29 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt1
