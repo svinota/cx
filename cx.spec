@@ -69,12 +69,16 @@ in Plan9, 9P can be used also for composite file access, RPC etc.
 %files
 
 %files -n %{pprefix}-cxnet
+%_bindir/cxkey
 %{python_sitelibdir}/cxnet*
 
 %files -n %{pprefix}-py9p
 %{python_sitelibdir}/py9p*
 
 %changelog
+* Wed Jun 15 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt3
+- cxkey utility added
+
 * Sun May 29 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt2
 - Sisyphus build fixed.
 
