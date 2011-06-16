@@ -5,6 +5,8 @@ import getopt
 import os
 import copy
 import py9p
+import pwd
+import grp
 from cStringIO import StringIO
 
 import getopt
@@ -30,8 +32,11 @@ class Inode(py9p.Dir):
         self.type = 0
         self.dev = 0
         self.atime = self.mtime = int(time.time())
-        self.uid = self.gid = self.muid = os.environ['USER']
-        if self.qid.type & py9p.DMDIR:
+        self.uidnum = self.muidnum = os.getuid()
+        self.gidnum = os.getgid()
+        self.uid = self.muid = pwd.getpwuid(self.uidnum).pw_name
+        self.gid = grp.getgrgid(self.gidnum).gr_name
+        if self.qid.type & py9p.QTDIR:
             self.mode = py9p.DMDIR | DEFAULT_DIR_MODE
             self.children = []
         else:
@@ -43,7 +48,11 @@ class Inode(py9p.Dir):
         if self.qid.type & py9p.QTDIR:
             return len(self.children)
         else:
-            return self.data.len
+            p = self.data.tell()
+            self.data.seek(0,os.SEEK_END)
+            l = self.data.tell()
+            self.data.seek(p,os.SEEK_SET)
+            return l
 
 class VFS(py9p.Server):
     """
@@ -145,7 +154,6 @@ class VFS(py9p.Server):
             raise py9p.ServerError("Is a directory")
         f.data.seek(req.ifcall.offset)
         f.data.write(req.ifcall.data)
-        f.length = f.data.len
         req.ofcall.count = len(req.ifcall.data)
         srv.respond(req, None)
 
@@ -191,7 +199,7 @@ def main(prog, *args):
         usage(prog)
     for opt,optarg in opt:
         if opt == '-d':
-            dotu = optarg
+            dotu = True
         if opt == "-D":
             dbg = True
         if opt == "-p":
@@ -218,7 +226,7 @@ def main(prog, *args):
         print >>sys.stderr, "unknown auth type: %s; accepted: pki or sk1"%authmode
         sys.exit(1)
 
-    srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=dbg)
+    srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=dbg, dotu=dotu)
     srv.mount(VFS())
     srv.serve()
 
