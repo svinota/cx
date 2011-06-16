@@ -5,33 +5,57 @@ import getopt
 import os
 import copy
 import py9p
-from StringIO import StringIO
+from cStringIO import StringIO
 
 import getopt
 import getpass
 
-class SampleFs(py9p.Server):
+
+DEFAULT_DIR_MODE = 0750
+DEFAULT_FILE_MODE = 0640
+
+class Inode(py9p.Dir):
     """
-    A sample plugin filesystem.
+    VFS inode, based on py9p.Dir
+    """
+    def __init__(self,name,qtype=0,parent=None):
+        py9p.Dir.__init__(self,True)
+        self.parent = parent
+        self.name = name
+        #
+        # DMDIR = 0x80000000
+        # QTDIR = 0x80
+        #
+        self.qid = py9p.Qid((qtype >> 24) & py9p.QTDIR, 0, py9p.hash8(name))
+        self.type = 0
+        self.dev = 0
+        self.atime = self.mtime = int(time.time())
+        self.uid = self.gid = self.muid = os.environ['USER']
+        if self.qid.type & py9p.DMDIR:
+            self.mode = py9p.DMDIR | DEFAULT_DIR_MODE
+            self.children = []
+        else:
+            self.mode = DEFAULT_FILE_MODE
+            self.data = StringIO()
+
+    @property
+    def length(self):
+        if self.qid.type & py9p.QTDIR:
+            return len(self.children)
+        else:
+            return self.data.len
+
+class VFS(py9p.Server):
+    """
+    VFS 
     """
     mountpoint = '/'
     root = None
-    
-    # files database
     files = {}
-    
+
     def __init__(self):
         self.start = int(time.time())
-        rootdir = py9p.Dir(0)    # not dotu
-        rootdir.children = []
-        rootdir.type = 0
-        rootdir.dev = 0
-        rootdir.mode = 020000000755
-        rootdir.atime = rootdir.mtime = int(time.time())
-        rootdir.length = 0
-        rootdir.name = '/'
-        rootdir.uid = rootdir.gid = rootdir.muid = os.environ['USER']
-        rootdir.qid = py9p.Qid(py9p.QTDIR, 0, py9p.hash8(rootdir.name))
+        rootdir = Inode('/', py9p.DMDIR)
         rootdir.parent = rootdir
         self.root = rootdir    # / is its own parent, just so we don't fall off the edge of the earth
         self.files[self.root.qid.path] = self.root
@@ -39,26 +63,7 @@ class SampleFs(py9p.Server):
     def create(self, srv, req):
         # get parent
         f = self.files[req.fid.qid.path]
-        if req.ifcall.perm & py9p.DMDIR:
-            ftype = py9p.QTDIR
-        else:
-            ftype = 0
-        new = py9p.Dir(0,
-            dev=0,
-            type=0,
-            mode=req.ifcall.perm,
-            length=0,
-            name=req.ifcall.name,
-            qid=py9p.Qid(ftype, 0, py9p.hash8(req.ifcall.name)),
-            uid=os.environ['USER'],
-            gid=f.gid,
-            muid=os.environ['USER'],
-            parent=f)
-        new.atime = new.mtime = int(time.time())
-        if ftype is not 0:
-            new.children = []
-        else:
-            new.data = StringIO()
+        new = Inode(req.ifcall.name, req.ifcall.perm,f)
         self.files[new.qid.path] = new
         f.children.append(new)
         req.ofcall.qid = new.qid
@@ -104,14 +109,21 @@ class SampleFs(py9p.Server):
 
         f = self.files[req.fid.qid.path]
         s = req.ifcall.stat[0]
+
         # change uid?
-        if s.uid:
-            f.uid = s.uid
+        if s.uidnum != 0xFFFFFFFF:
+            f.uid = getpwuid(s.uidnum).pw_name
+        else:
+            if s.uid:
+                f.uid = s.uid
         # change gid?
-        if s.gid:
-            f.gid = s.gid
+        if s.gidnum != 0xFFFFFFFF:
+            f.gid = getgrgid(s.gidnum).gr_name
+        else:
+            if s.gid:
+                f.gid = s.gid
         # change mode?
-        if s.mode is not 0xFFFFFFFF:
+        if s.mode != 0xFFFFFFFF:
             f.mode = ((f.mode & 07777) ^ f.mode) | (s.mode & 07777)
         # change name?
         if s.name:
@@ -207,7 +219,7 @@ def main(prog, *args):
         sys.exit(1)
 
     srv = py9p.Server(listen=(listen, port), authmode=authmode, user=user, dom=dom, key=key, chatty=dbg)
-    srv.mount(SampleFs())
+    srv.mount(VFS())
     srv.serve()
 
 
