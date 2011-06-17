@@ -128,14 +128,14 @@ class Storage(object):
             f.name = stat.name
 
 
-class VFS(py9p.Server):
+class v9fs(py9p.Server):
     """
-    VFS 
+    VFS 9p abstraction layer
     """
 
-    def __init__(self):
+    def __init__(self, storage):
         self.mountpoint = '/'
-        self.storage = Storage()
+        self.storage = storage
         self.root = self.storage.root
 
     def create(self, srv, req):
@@ -237,6 +237,7 @@ if __name__ == "__main__" :
             address = k
 
     print("%s:%s, debug=%s" % (address,port,dbg))
+    storage = Storage()
     srv = py9p.Server(listen=(address, port), chatty=dbg, dotu=True)
-    srv.mount(VFS())
+    srv.mount(v9fs(storage))
     srv.serve()
