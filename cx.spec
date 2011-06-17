@@ -54,6 +54,7 @@ Summary: Pure Python implementation of 9P protocol (Plan9)
 Group: Development/Python
 License: MIT
 BuildArch: noarch
+URL: http://mirtchovski.com/p9/py9p
 
 %description -n %{pprefix}-py9p
 Protocol 9P is developed for Plan9 operating system from Bell Labs.
