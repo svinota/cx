@@ -37,6 +37,7 @@ class Inode(py9p.Dir):
         self.uid = self.muid = pwd.getpwuid(self.uidnum).pw_name
         self.gid = grp.getgrgid(self.gidnum).gr_name
         self.children = []
+        self.writelock = False
         if self.qid.type & py9p.QTDIR:
             self.mode = py9p.DMDIR | DEFAULT_DIR_MODE
         else:
@@ -193,7 +194,16 @@ class v9fs(py9p.Server):
         srv.respond(req, None)
 
     def write(self, srv, req):
+        f = self.storage.checkout(req.fid.qid.path)
+        f.writelock = True
         req.ofcall.count = self.storage.write(req.fid.qid.path,req.ifcall.data,req.ifcall.offset)
+        srv.respond(req, None)
+
+    def clunk(self, srv, req):
+        f = self.storage.checkout(req.fid.qid.path)
+        if f.writelock:
+            f.writelock = False
+            print("--- exec ---")
         srv.respond(req, None)
 
     def remove(self, srv, req):
