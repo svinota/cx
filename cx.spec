@@ -2,7 +2,7 @@
 
 Name: connexion
 Version: 0.7.1
-Release: alt2
+Release: alt3
 Summary: Python framework to build network-centric systems
 License: GPLv3
 Group: Development/Python
@@ -77,8 +77,10 @@ in Plan9, 9P can be used also for composite file access, RPC etc.
 %{python_sitelibdir}/py9p*
 
 %changelog
-* Wed Jun 15 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt3
+* Wed Jun 17 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt3
 - cxkey utility added
+- named parameters for py9p.Dir
+- zeroconf.py fixed and tested
 
 * Sun May 29 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt2
 - Sisyphus build fixed.
