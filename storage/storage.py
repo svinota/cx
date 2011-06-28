@@ -83,8 +83,16 @@ class Storage(object):
             raise py9p.ServerError("file not found")
         return self.files[target]
 
+    def commit(self,target):
+        f = self.checkout(target)
+        if f.writelock:
+            f.writelock = False
+            print f.path()
+
     def write(self,target,data,offset=0):
         f = self.checkout(target)
+
+        f.writelock = True
 
         if f.qid.type & py9p.QTDIR:
             raise py9p.ServerError("Is a directory")
@@ -195,15 +203,11 @@ class v9fs(py9p.Server):
 
     def write(self, srv, req):
         f = self.storage.checkout(req.fid.qid.path)
-        f.writelock = True
         req.ofcall.count = self.storage.write(req.fid.qid.path,req.ifcall.data,req.ifcall.offset)
         srv.respond(req, None)
 
     def clunk(self, srv, req):
-        f = self.storage.checkout(req.fid.qid.path)
-        if f.writelock:
-            f.writelock = False
-            print("--- exec ---")
+        self.storage.commit(req.fid.qid.path)
         srv.respond(req, None)
 
     def remove(self, srv, req):
