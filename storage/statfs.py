@@ -7,6 +7,7 @@ import copy
 import py9p
 import pwd
 import grp
+import re
 from cStringIO import StringIO
 
 import getopt
@@ -26,6 +27,7 @@ class Taskstats(object):
 
     def get(self,pid):
         (l,msg) = self.s.send_cmd(self.prid,TASKSTATS_CMD_GET,TASKSTATS_TYPE_PID,c_uint32(pid))
+        # hprint(msg,l)
         a = nlattr.from_address(addressof(msg.data))
         pid = nlattr.from_address(addressof(msg.data) + sizeof(a))
         stats = taskstatsmsg.from_address(addressof(msg.data) + sizeof(a) + NLMSG_ALIGN(pid.nla_len) + sizeof(nlattr))
@@ -46,7 +48,7 @@ class Inode(py9p.Dir):
         # DMDIR = 0x80000000
         # QTDIR = 0x80
         #
-        self.qid = py9p.Qid((qtype >> 24) & py9p.QTDIR, 0, py9p.hash8(name))
+        self.qid = py9p.Qid((qtype >> 24) & py9p.QTDIR, 0, py9p.hash8(self.absolute_name()))
         self.type = 0
         self.dev = 0
         self.atime = self.mtime = int(time.time())
@@ -61,6 +63,12 @@ class Inode(py9p.Dir):
         else:
             self.mode = DEFAULT_FILE_MODE
             self.data = StringIO()
+
+    def absolute_name(self):
+        if (self.parent is not None) and (self.parent != self):
+            return "%s/%s" % (self.parent.absolute_name(),self.name)
+        else:
+            return self.name
 
     def checkout(self):
         return self
@@ -77,17 +85,33 @@ class Inode(py9p.Dir):
             return l
 
 class RootDir(Inode):
-    def __init__(self):
-        Inode.__init__(self,"/",qtype=py9p.QTDIR)
+    def __init__(self,storage):
+        Inode.__init__(self,"/",qtype=py9p.DMDIR)
+        self.storage = storage
 
     def checkout(self):
-        # create dir list:
-        self.children = [ ProcessDir(x,self) for x in os.listdir("/proc") if re.match(r'^[0-9]+$',x) ]
+        # build children dict
+        ch = dict([ (x.name,x) for x in self.children ])
+        # create set of children names
+        chs = set(ch.keys())
+        # create set of actual processes
+        prs = set([x for x in os.listdir("/proc") if re.match(r'^[0-9]+$',x)])
+        # inodes to delete
+        to_delete = chs - prs
+        [ self.children.remove(x) for x in [ ch[y] for y in to_delete ] ]
+        [ self.storage.files.__delitem__(x) for x in [ ch[y].qid.path for y in to_delete ] ]
+        # inodes to create
+        to_create = prs - chs
+        [ self.children.append(x) for x in [ ProcessDir(y,self) for y in to_create ] ]
+        # update children dict
+        ch = dict([ (x.name,x) for x in self.children ])
+        [ self.storage.files.__setitem__(x,z) for x,z in [ (ch[y].qid.path,ch[y]) for y in to_create ] ]
+
         return self
 
 class ProcessDir(Inode):
     def __init__(self,name,parent=None):
-        Inode.__init__(self,name,qtype=py9p.QTDIR,parent=parent)
+        Inode.__init__(self,name,qtype=py9p.DMDIR,parent=parent)
         self.taskstats = TaskstatsInode(pid=name,parent=self)
         self.children.append(self.taskstats)
 
@@ -97,7 +121,10 @@ class TaskstatsInode(Inode):
         self.pid = pid
 
     def checkout(self):
-        self.data = StringIO(taskstats.get(self.pid).sprint())
+        self.data = StringIO(taskstats.get(int(self.pid)).sprint())
+        self.data.seek(0)
+        print self.data.getvalue()
+        return self
 
 class Storage(object):
     """
@@ -105,7 +132,7 @@ class Storage(object):
     """
     def __init__(self):
         self.files = {}
-        self.root = Inode("/",py9p.DMDIR)
+        self.root = RootDir(storage=self)
         self.root.parent = self.root
         self.cwd = self.root
         self.files[self.root.qid.path] = self.root
