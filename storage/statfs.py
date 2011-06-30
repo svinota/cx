@@ -106,6 +106,7 @@ class RootDir(Inode):
         # update children dict
         ch = dict([ (x.name,x) for x in self.children ])
         [ self.storage.files.__setitem__(x,z) for x,z in [ (ch[y].qid.path,ch[y]) for y in to_create ] ]
+        [ self.storage.files.__setitem__(x,z) for x,z in [ (ch[y].taskstats.qid.path,ch[y].taskstats) for y in to_create ] ]
 
         return self
 
