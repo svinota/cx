@@ -7,7 +7,6 @@ import copy
 import py9p
 import pwd
 import grp
-import re
 from cStringIO import StringIO
 
 import getopt
@@ -40,8 +39,9 @@ class Inode(py9p.Dir):
     """
     VFS inode, based on py9p.Dir
     """
-    def __init__(self,name,qtype=0,parent=None):
+    def __init__(self,name,parent,qtype=0):
         py9p.Dir.__init__(self,True)
+
         self.parent = parent
         self.name = name
         #
@@ -56,10 +56,12 @@ class Inode(py9p.Dir):
         self.gidnum = os.getgid()
         self.uid = self.muid = pwd.getpwuid(self.uidnum).pw_name
         self.gid = grp.getgrgid(self.gidnum).gr_name
-        self.children = []
+        self.children = {}
         self.writelock = False
         if self.qid.type & py9p.QTDIR:
             self.mode = py9p.DMDIR | DEFAULT_DIR_MODE
+            self.children["."] = self
+            self.children[".."] = self.parent
         else:
             self.mode = DEFAULT_FILE_MODE
             self.data = StringIO()
@@ -70,13 +72,13 @@ class Inode(py9p.Dir):
         else:
             return self.name
 
-    def checkout(self):
-        return self
+    def sync(self):
+        pass
 
     @property
     def length(self):
         if self.qid.type & py9p.QTDIR:
-            return len(self.children)
+            return len(self.children.keys())
         else:
             p = self.data.tell()
             self.data.seek(0,os.SEEK_END)
@@ -86,46 +88,42 @@ class Inode(py9p.Dir):
 
 class RootDir(Inode):
     def __init__(self,storage):
-        Inode.__init__(self,"/",qtype=py9p.DMDIR)
+        Inode.__init__(self,"/",self,qtype=py9p.DMDIR)
         self.storage = storage
 
-    def checkout(self):
-        # build children dict
-        ch = dict([ (x.name,x) for x in self.children ])
+    def sync(self):
+
         # create set of children names
-        chs = set(ch.keys())
+        chs = set(self.children.keys())
         # create set of actual processes
-        prs = set([x for x in os.listdir("/proc") if re.match(r'^[0-9]+$',x)])
+        prs = set([x for x in os.listdir("/proc") if x.isdigit()])
+
         # inodes to delete
         to_delete = chs - prs
-        [ self.children.remove(x) for x in [ ch[y] for y in to_delete ] ]
-        [ self.storage.files.__delitem__(x) for x in [ ch[y].qid.path for y in to_delete ] ]
+        to_delete.remove(".")
+        to_delete.remove("..")
+        [ self.storage.files.__delitem__(x) for x in [ self.children[y].qid.path for y in to_delete ] ]
+        [ self.children.__delitem__(x) for x in to_delete ]
         # inodes to create
         to_create = prs - chs
-        [ self.children.append(x) for x in [ ProcessDir(y,self) for y in to_create ] ]
-        # update children dict
-        ch = dict([ (x.name,x) for x in self.children ])
-        [ self.storage.files.__setitem__(x,z) for x,z in [ (ch[y].qid.path,ch[y]) for y in to_create ] ]
-        [ self.storage.files.__setitem__(x,z) for x,z in [ (ch[y].taskstats.qid.path,ch[y].taskstats) for y in to_create ] ]
-
-        return self
+        [ self.children.__setitem__(x.name,x) for x in [ ProcessDir(y,self) for y in to_create ] ]
+        [ self.storage.files.__setitem__(x,z) for x,z in [ (self.children[y].qid.path,self.children[y]) for y in to_create ] ]
+        [ self.storage.files.__setitem__(x,z) for x,z in [ (self.children[y].taskstats.qid.path,self.children[y].taskstats) for y in to_create ] ]
 
 class ProcessDir(Inode):
-    def __init__(self,name,parent=None):
-        Inode.__init__(self,name,qtype=py9p.DMDIR,parent=parent)
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
         self.taskstats = TaskstatsInode(pid=name,parent=self)
-        self.children.append(self.taskstats)
+        self.children["taskstats"] = self.taskstats
 
 class TaskstatsInode(Inode):
-    def __init__(self,pid,parent=None):
-        Inode.__init__(self,"taskstats",parent=parent)
+    def __init__(self,pid,parent):
+        Inode.__init__(self,"taskstats",parent)
         self.pid = pid
 
-    def checkout(self):
+    def sync(self):
         self.data = StringIO(taskstats.get(int(self.pid)).sprint())
         self.data.seek(0)
-        print self.data.getvalue()
-        return self
 
 class Storage(object):
     """
@@ -134,7 +132,6 @@ class Storage(object):
     def __init__(self):
         self.files = {}
         self.root = RootDir(storage=self)
-        self.root.parent = self.root
         self.cwd = self.root
         self.files[self.root.qid.path] = self.root
 
@@ -143,17 +140,17 @@ class Storage(object):
             self.cwd = parent
         new = Inode(name,mode,self.cwd)
         self.files[new.qid.path] = new
-        self.cwd.children.append(new)
+        self.cwd.children[new.name] = new
         return new.qid
 
     def chdir(self,target):
         if isinstance(target,py9p.Qid):
-            self.cwd = self.files[target].checkout()
+            self.cwd = self.files[target]
 
     def checkout(self,target):
         if not self.files.has_key(target):
             raise py9p.ServerError("file not found")
-        return self.files[target].checkout()
+        return self.files[target]
 
     def commit(self,target):
         f = self.checkout(target)
@@ -180,9 +177,9 @@ class Storage(object):
 
     def remove(self,target):
         f = self.checkout(target)
-        for i in f.children:
+        for i in f.children.values():
             self.remove(i.qid.path)
-        f.parent.children.remove(f)
+        del f.parent.children[f.name]
         del self.files[target]
 
     def wstat(self,target,stat):
@@ -223,43 +220,41 @@ class v9fs(py9p.Server):
         '''If we have a file tree then simply check whether the Qid matches
         anything inside. respond qid and iounit are set by protocol'''
         f = self.storage.checkout(req.fid.qid.path)
-
-        f.checkout()
+        f.sync()
 
         if (req.ifcall.mode & f.mode) != py9p.OREAD :
             raise py9p.ServerError("permission denied")
 
         srv.respond(req, None)
 
-    def walk(self, srv, req):
-        # root walks are handled inside the protocol if we have self.root
-        # set, so don't do them here. '..' however is handled by us,
-        # trivially
+    def walk(self, srv, req, fid = None):
 
-        f = self.storage.checkout(req.fid.qid.path)
-
-        if len(req.ifcall.wname) > 1:
-            srv.respond(req, "don't know how to handle multiple walks yet")
-            return
+        fd = fid or req.fid
+        f = self.storage.checkout(fd.qid.path)
 
         if req.ifcall.wname[0] == '..':
             req.ofcall.wqid.append(f.parent.qid)
             self.storage.chdir(f.parent.qid.path)
-            srv.respond(req, None)
-            return
 
-        for x in f.children:
-            if req.ifcall.wname[0] == x.name:
-                req.ofcall.wqid.append(x.qid)
-                self.storage.chdir(x.qid.path)
-                srv.respond(req, None)
+        for (i,k) in f.children.items():
+            if req.ifcall.wname[0] == i:
+                req.ofcall.wqid.append(k.qid)
+                if k.qid.type & py9p.QTDIR:
+                    self.storage.chdir(k.qid.path)
+                if len(req.ifcall.wname) > 1:
+                    req.ifcall.wname.pop(0)
+                    self.walk(srv,req,k)
+                else:
+                    srv.respond(req, None)
                 return
 
         srv.respond(req, "file not found")
         return
 
     def stat(self, srv, req):
-        req.ofcall.stat.append(self.storage.checkout(req.fid.qid.path))
+        f = self.storage.checkout(req.fid.qid.path)
+        f.sync()
+        req.ofcall.stat.append(f)
         srv.respond(req, None)
 
     def read(self, srv, req):
@@ -267,10 +262,14 @@ class v9fs(py9p.Server):
         f = self.storage.checkout(req.fid.qid.path)
 
         if f.qid.type & py9p.QTDIR:
+            f.sync()
             req.ofcall.stat = []
-            for x in f.children:
-                req.ofcall.stat.append(x)
+            for (i,k) in f.children.items():
+                if i not in (".",".."):
+                    req.ofcall.stat.append(k)
         else:
+            if req.ifcall.offset == 0:
+                f.sync()
             req.ofcall.data = self.storage.read(f.qid.path,req.ifcall.count,req.ifcall.offset)
             req.ofcall.count = len(req.ofcall.data)
 
