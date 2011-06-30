@@ -232,10 +232,6 @@ class v9fs(py9p.Server):
         fd = fid or req.fid
         f = self.storage.checkout(fd.qid.path)
 
-        if req.ifcall.wname[0] == '..':
-            req.ofcall.wqid.append(f.parent.qid)
-            self.storage.chdir(f.parent.qid.path)
-
         for (i,k) in f.children.items():
             if req.ifcall.wname[0] == i:
                 req.ofcall.wqid.append(k.qid)
