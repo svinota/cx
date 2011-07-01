@@ -112,11 +112,12 @@ class RootDir(Inode):
         Inode.__init__(self,"/",self,qtype=py9p.DMDIR,storage=storage)
         self.storage = storage
         self.child_map = {
-            "*": InterfaceDir
+            "*": InterfaceDir,
+            "README": ReadmeInode,
         }
 
     def sync_children(self):
-        return [ x['dev'] for x in iproute2.get_all_links() ]
+        return [ x['dev'] for x in iproute2.get_all_links() ] + ['README']
 
 
 class InterfaceDir(Inode):
@@ -125,6 +126,18 @@ class InterfaceDir(Inode):
         self.child_map = {
             "addresses": AdressesInode
         }
+
+class ReadmeInode(Inode):
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent)
+        self.data = StringIO("""
+        This filesystem is exported from a python script with 9P protocol.
+        Interface data is obtained via rtnetlink protocol.
+
+        9P protocol: http://9p.cat-v.org/documentation/rfc/
+        Source code: http://projects.radlinux.org/cx/browser/cx/storage/iproute2fs.py
+
+""")
 
 class AdressesInode(Inode):
     def __init__(self,name,parent):
