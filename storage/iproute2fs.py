@@ -60,6 +60,9 @@ class Inode(py9p.Dir):
         else:
             return self.name
 
+    def commit(self):
+        pass
+
     def sync_children(self):
         return [ x for x in self.child_map.keys() if x != "*" ]
 
@@ -112,19 +115,42 @@ class RootDir(Inode):
         Inode.__init__(self,"/",self,qtype=py9p.DMDIR,storage=storage)
         self.storage = storage
         self.child_map = {
-            "*": InterfaceDir,
-            "README": ReadmeInode,
+            "*":        InterfaceDir,
+            "README":   ReadmeInode,
+            "ifmap":    MapInode,
         }
 
     def sync_children(self):
-        return [ x['dev'] for x in iproute2.get_all_links() ] + ['README']
+        return [ x['dev'] for x in iproute2.get_all_links() ] + ['README','ifmap']
 
+class WrappedIO(object):
+    def sync(self):
+        l = self.data.tell()
+        self.data.seek(0)
+        self.data.truncate()
+        self._sync()
+        if l < self.data.tell():
+            self.data.seek(0)
+
+    def commit(self):
+        l = self.data.tell()
+        self.data.seek(0)
+        self._commit()
+        if l < self.data.tell():
+            self.data.seek(0)
+
+class MapInode(WrappedIO,Inode):
+    def _sync(self):
+        [ self.data.write("%-16s\t%-17s\n" % (x,y)) for x,y in [ (z["dev"],z["hwaddr"]) for z in iproute2.get_all_links() ] ]
 
 class InterfaceDir(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
         self.child_map = {
-            "addresses": AdressesInode
+            "addresses":    AdressesInode,
+            "flags":        FlagsInode,
+            "mtu":          MtuInode,
+            "hwaddr":       HwAddressInode,
         }
 
 class ReadmeInode(Inode):
@@ -137,16 +163,44 @@ class ReadmeInode(Inode):
         9P protocol: http://9p.cat-v.org/documentation/rfc/
         Source code: http://projects.radlinux.org/cx/browser/cx/storage/iproute2fs.py
 
+        You can get all source tree wirh git clone git://projects.radlinux.org/cx
 """)
 
-class AdressesInode(Inode):
+class InterfaceInode(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent)
         self.iface = self.parent.name
+        self.addresses = []
 
-    def sync(self):
-        self.data = StringIO(str(iproute2.get_addr(self.iface)))
-        self.data.seek(0)
+class MtuInode(WrappedIO,InterfaceInode):
+    def _sync(self):
+        self.data.write(str(iproute2.get_link(self.iface)['mtu']))
+
+class FlagsInode(WrappedIO,InterfaceInode):
+    def _sync(self):
+        self.data.write(",".join(iproute2.get_link(self.iface)['flags']))
+
+class HwAddressInode(WrappedIO,InterfaceInode):
+    def _sync(self):
+        self.data.write(iproute2.get_link(self.iface)['hwaddr'])
+
+class AdressesInode(WrappedIO,InterfaceInode):
+
+    def _sync(self):
+        s = ""
+        self.addresses = [ "%s/%s" % (x['local'],x['mask']) for x in iproute2.get_addr(self.iface) if x.has_key('local') ]
+        for x in self.addresses:
+            s += "%s\n" % (x)
+        self.data.write(s)
+
+    def _commit(self):
+        # get addr. list
+        chs = set(self.children)
+        prs = set([ x.strip() for x in self.data.readlines() ])
+        to_delete = chs - prs
+        to_create = prs - chs
+        [ iproute2.del_addr(self.iface,x) for x in to_delete ]
+        [ iproute2.add_addr(self.iface,x) for x in to_create ]
 
 class Storage(object):
     """
@@ -185,7 +239,7 @@ class Storage(object):
         f = self.checkout(target)
         if f.writelock:
             f.writelock = False
-            print f.path()
+            f.commit()
 
     def write(self,target,data,offset=0):
         f = self.checkout(target)
@@ -201,6 +255,8 @@ class Storage(object):
 
     def read(self,target,size,offset=0):
         f = self.checkout(target)
+        if offset == 0:
+            f.sync()
         f.data.seek(offset)
         return f.data.read(size)
 
@@ -280,6 +336,15 @@ class v9fs(py9p.Server):
         f = self.storage.checkout(req.fid.qid.path)
         f.sync()
         req.ofcall.stat.append(f)
+        srv.respond(req, None)
+
+    def write(self, srv, req):
+        f = self.storage.checkout(req.fid.qid.path)
+        req.ofcall.count = self.storage.write(req.fid.qid.path,req.ifcall.data,req.ifcall.offset)
+        srv.respond(req, None)
+
+    def clunk(self, srv, req):
+        self.storage.commit(req.fid.qid.path)
         srv.respond(req, None)
 
     def read(self, srv, req):
