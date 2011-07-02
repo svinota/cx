@@ -14,8 +14,8 @@ import getpass
 
 from cxnet.netlink.iproute2 import iproute2
 
-DEFAULT_DIR_MODE = 0750
-DEFAULT_FILE_MODE = 0640
+DEFAULT_DIR_MODE = 0755
+DEFAULT_FILE_MODE = 0644
 
 class Inode(py9p.Dir):
     """
