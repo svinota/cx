@@ -220,7 +220,7 @@ class AdressesInode(WrappedIO,InterfaceInode):
 
     def _commit(self):
         # get addr. list
-        chs = set(self.children)
+        chs = set(self.addresses)
         prs = set([ x.strip() for x in self.data.readlines() ])
         to_delete = chs - prs
         to_create = prs - chs
