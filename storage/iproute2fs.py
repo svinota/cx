@@ -118,6 +118,7 @@ class RootDir(Inode):
             "README":       ReadmeInode,
             "ifmap":        MapInode,
             "interfaces":   IfacesDir,
+            "log":          LogInode,
         }
 
 class IfacesDir(Inode):
@@ -133,18 +134,18 @@ class IfacesDir(Inode):
 class WrappedIO(object):
     def sync(self):
         l = self.data.tell()
-        self.data.seek(0)
+        self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
         self._sync()
         if l < self.data.tell():
-            self.data.seek(0)
+            self.data.seek(0,os.SEEK_SET)
 
     def commit(self):
         l = self.data.tell()
-        self.data.seek(0)
+        self.data.seek(0,os.SEEK_SET)
         self._commit()
         if l < self.data.tell():
-            self.data.seek(0)
+            self.data.seek(0,os.SEEK_SET)
 
 class MapInode(WrappedIO,Inode):
     def _sync(self):
@@ -159,6 +160,16 @@ class InterfaceDir(Inode):
             "mtu":          MtuInode,
             "hwaddr":       HwAddressInode,
         }
+
+class LogInode(Inode):
+    def sync(self):
+        self.data.seek(0,os.SEEK_END)
+        while iproute2.status()[0] > 0:
+            for item in iproute2.get():
+                t = item["timestamp"]
+                del item["timestamp"]
+                print "add %s" % (item)
+                self.data.write("%s %s\n" % (t,str(item)))
 
 class ReadmeInode(Inode):
     def __init__(self,name,parent):
@@ -274,7 +285,7 @@ class Storage(object):
         if f.qid.type & py9p.QTDIR:
             raise py9p.ServerError("Is a directory")
 
-        f.data.seek(offset)
+        f.data.seek(offset,os.SEEK_SET)
         f.data.write(data)
         return len(data)
 
@@ -282,7 +293,7 @@ class Storage(object):
         f = self.checkout(target)
         if offset == 0:
             f.sync()
-        f.data.seek(offset)
+        f.data.seek(offset,os.SEEK_SET)
         return f.data.read(size)
 
     def remove(self,target):
