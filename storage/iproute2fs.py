@@ -40,6 +40,7 @@ class Inode(py9p.Dir):
         self.uid = self.muid = pwd.getpwuid(self.uidnum).pw_name
         self.gid = grp.getgrgid(self.gidnum).gr_name
         self.children = {}
+        self.static_children = {}
         self.writelock = False
         if self.qid.type & py9p.QTDIR:
             self.mode = py9p.DMDIR | DEFAULT_DIR_MODE
@@ -66,7 +67,12 @@ class Inode(py9p.Dir):
     def sync_children(self):
         return [ x for x in self.child_map.keys() if x != "*" ]
 
-    def create_child(self,name):
+    def remove(self,child):
+        if child.name in self.static_children.keys():
+            del self.static_children[child.name]
+            del self.children[child.name]
+
+    def create(self,name,qtype=0):
         # return a specific class
         if self.child_map.has_key(name):
             return self.child_map[name](name,self)
@@ -74,13 +80,51 @@ class Inode(py9p.Dir):
         if self.child_map.has_key("*"):
             return self.child_map["*"](name,self)
         # return default Inode class otherwise
-        return Inode(name,self,self.storage)
+        self.static_children[name] = Inode(name,self,qtype=qtype,storage=self.storage)
+        return self.static_children[name]
+
+    def rename(self,old_name,new_name):
+
+        self.sync()
+
+        if new_name in self.child_map.keys():
+            # the target is special and exists already
+            self.children[new_name].data = self.children[old_name].data
+            self.children[new_name].commit()
+        else:
+            self.children[new_name] = self.children[old_name]
+            self.static_children[new_name] = self.static_children[old_name]
+
+        del self.children[old_name]
+        del self.static_children[old_name]
+
+    def wstat(self,stat):
+        # change uid?
+        if stat.uidnum != 0xFFFFFFFF:
+            self.uid = getpwuid(stat.uidnum).pw_name
+        else:
+            if stat.uid:
+                self.uid = stat.uid
+        # change gid?
+        if stat.gidnum != 0xFFFFFFFF:
+            self.gid = getgrgid(stat.gidnum).gr_name
+        else:
+            if stat.gid:
+                self.gid = stat.gid
+        # change mode?
+        if stat.mode != 0xFFFFFFFF:
+            self.mode = ((self.mode & 07777) ^ self.mode) | (stat.mode & 07777)
+        # change name?
+        if stat.name:
+            # update parent
+            self.parent.rename(self.name,stat.name)
+            self.name = stat.name
 
     def sync(self):
         # create set of children names
         chs = set(self.children.keys())
         # create set of actual items
-        prs = set(self.sync_children())
+        prs = set(self.sync_children() + self.static_children.keys())
 
         # inodes to delete
         to_delete = chs - prs
@@ -93,7 +137,7 @@ class Inode(py9p.Dir):
         # inodes to create
         to_create = prs - chs
         # add to children
-        [ self.children.__setitem__(x.name,x) for x in [ self.create_child(y) for y in to_create ] ]
+        [ self.children.__setitem__(x.name,x) for x in [ self.create(y) for y in to_create ] ]
         # add to storage
         [ self.storage.register(x) for x in [ self.children[y] for y in to_create ] ]
 
@@ -102,13 +146,10 @@ class Inode(py9p.Dir):
     @property
     def length(self):
         if self.qid.type & py9p.QTDIR:
-            return len(self.children.keys())
+            return len(self.children.keys()) + len(self.static_children)
         else:
-            p = self.data.tell()
             self.data.seek(0,os.SEEK_END)
-            l = self.data.tell()
-            self.data.seek(p,os.SEEK_SET)
-            return l
+            return self.data.tell()
 
 class RootDir(Inode):
     def __init__(self,storage):
@@ -131,24 +172,10 @@ class IfacesDir(Inode):
     def sync_children(self):
         return [ x['dev'] for x in iproute2.get_all_links() ]
 
-class WrappedIO(object):
+class MapInode(Inode):
     def sync(self):
-        l = self.data.tell()
         self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
-        self._sync()
-        if l < self.data.tell():
-            self.data.seek(0,os.SEEK_SET)
-
-    def commit(self):
-        l = self.data.tell()
-        self.data.seek(0,os.SEEK_SET)
-        self._commit()
-        if l < self.data.tell():
-            self.data.seek(0,os.SEEK_SET)
-
-class MapInode(WrappedIO,Inode):
-    def _sync(self):
         [ self.data.write("%-16s\t%-17s\n" % (x,y)) for x,y in [ (z["dev"],z["hwaddr"]) for z in iproute2.get_all_links() ] ]
 
 class InterfaceDir(Inode):
@@ -208,29 +235,38 @@ class InterfaceInode(Inode):
         self.iface = self.parent.name
         self.addresses = []
 
-class MtuInode(WrappedIO,InterfaceInode):
-    def _sync(self):
+class MtuInode(InterfaceInode):
+    def sync(self):
+        self.data.seek(0,os.SEEK_SET)
+        self.data.truncate()
         self.data.write(str(iproute2.get_link(self.iface)['mtu']))
 
-class FlagsInode(WrappedIO,InterfaceInode):
-    def _sync(self):
+class FlagsInode(InterfaceInode):
+    def sync(self):
+        self.data.seek(0,os.SEEK_SET)
+        self.data.truncate()
         self.data.write(",".join(iproute2.get_link(self.iface)['flags']))
 
-class HwAddressInode(WrappedIO,InterfaceInode):
-    def _sync(self):
+class HwAddressInode(InterfaceInode):
+    def sync(self):
+        self.data.seek(0,os.SEEK_SET)
+        self.data.truncate()
         self.data.write(iproute2.get_link(self.iface)['hwaddr'])
 
-class AdressesInode(WrappedIO,InterfaceInode):
+class AdressesInode(InterfaceInode):
 
-    def _sync(self):
+    def sync(self):
         s = ""
         self.addresses = [ "%s/%s" % (x['local'],x['mask']) for x in iproute2.get_addr(self.iface) if x.has_key('local') ]
         for x in self.addresses:
             s += "%s\n" % (x)
+        self.data.seek(0,os.SEEK_SET)
+        self.data.truncate()
         self.data.write(s)
 
-    def _commit(self):
+    def commit(self):
         # get addr. list
+        self.data.seek(0,os.SEEK_SET)
         chs = set(self.addresses)
         prs = set([ x.strip() for x in self.data.readlines() ])
         to_delete = chs - prs
@@ -257,9 +293,8 @@ class Storage(object):
     def create(self,name,mode=0,parent=None):
         if parent:
             self.cwd = parent
-        new = Inode(name,mode,self.cwd)
+        new = self.cwd.create(name,mode)
         self.files[new.qid.path] = new
-        self.cwd.children[new.name] = new
         return new.qid
 
     def chdir(self,target):
@@ -298,33 +333,13 @@ class Storage(object):
 
     def remove(self,target):
         f = self.checkout(target)
-        for i in f.children.values():
-            self.remove(i.qid.path)
-        del f.parent.children[f.name]
+        f.remove(f)
         del self.files[target]
 
     def wstat(self,target,stat):
 
         f = self.checkout(target)
-
-        # change uid?
-        if stat.uidnum != 0xFFFFFFFF:
-            f.uid = getpwuid(stat.uidnum).pw_name
-        else:
-            if stat.uid:
-                f.uid = stat.uid
-        # change gid?
-        if stat.gidnum != 0xFFFFFFFF:
-            f.gid = getgrgid(stat.gidnum).gr_name
-        else:
-            if stat.gid:
-                f.gid = stat.gid
-        # change mode?
-        if stat.mode != 0xFFFFFFFF:
-            f.mode = ((f.mode & 07777) ^ f.mode) | (stat.mode & 07777)
-        # change name?
-        if stat.name:
-            f.name = stat.name
+        f.wstat(stat)
 
 
 class v9fs(py9p.Server):
@@ -336,6 +351,12 @@ class v9fs(py9p.Server):
         self.mountpoint = '/'
         self.storage = storage
         self.root = self.storage.root
+
+    def create(self, srv, req):
+        # get parent
+        f = self.storage.checkout(req.fid.qid.path)
+        req.ofcall.qid = self.storage.create(req.ifcall.name, req.ifcall.perm,f)
+        srv.respond(req, None)
 
     def open(self, srv, req):
         '''If we have a file tree then simply check whether the Qid matches
@@ -352,8 +373,9 @@ class v9fs(py9p.Server):
 
         fd = fid or req.fid
         f = self.storage.checkout(fd.qid.path)
+        f.sync()
 
-        for (i,k) in f.children.items():
+        for (i,k) in f.children.items() + f.static_children.items():
             if req.ifcall.wname[0] == i:
                 req.ofcall.wqid.append(k.qid)
                 if k.qid.type & py9p.QTDIR:
@@ -367,6 +389,13 @@ class v9fs(py9p.Server):
 
         srv.respond(req, "file not found")
         return
+
+    def wstat(self, srv, req):
+
+        f = self.storage.checkout(req.fid.qid.path)
+        s = req.ifcall.stat[0]
+        self.storage.wstat(req.fid.qid.path,s)
+        srv.respond(req,None)
 
     def stat(self, srv, req):
         f = self.storage.checkout(req.fid.qid.path)
@@ -393,6 +422,8 @@ class v9fs(py9p.Server):
             for (i,k) in f.children.items():
                 if i not in (".",".."):
                     req.ofcall.stat.append(k)
+            for (i,k) in f.static_children.items():
+                req.ofcall.stat.append(k)
         else:
             if req.ifcall.offset == 0:
                 f.sync()
