@@ -40,7 +40,7 @@ class Inode(py9p.Dir):
         self.uid = self.muid = pwd.getpwuid(self.uidnum).pw_name
         self.gid = grp.getgrgid(self.gidnum).gr_name
         self.children = {}
-        self.static_children = {}
+        self.static_children = []
         self.writelock = False
         if self.qid.type & py9p.QTDIR:
             self.mode = py9p.DMDIR | DEFAULT_DIR_MODE
@@ -68,8 +68,8 @@ class Inode(py9p.Dir):
         return [ x for x in self.child_map.keys() if x != "*" ]
 
     def remove(self,child):
-        if child.name in self.static_children.keys():
-            del self.static_children[child.name]
+        if child.name in self.static_children:
+            self.static_children.remove(child.name)
             del self.children[child.name]
 
     def create(self,name,qtype=0):
@@ -80,8 +80,9 @@ class Inode(py9p.Dir):
         if self.child_map.has_key("*"):
             return self.child_map["*"](name,self)
         # return default Inode class otherwise
-        self.static_children[name] = Inode(name,self,qtype=qtype,storage=self.storage)
-        return self.static_children[name]
+        self.children[name] = Inode(name,self,qtype=qtype,storage=self.storage)
+        self.static_children.append(name)
+        return self.children[name]
 
     def rename(self,old_name,new_name):
 
@@ -93,10 +94,11 @@ class Inode(py9p.Dir):
             self.children[new_name].commit()
         else:
             self.children[new_name] = self.children[old_name]
-            self.static_children[new_name] = self.static_children[old_name]
+            if new_name not in self.static_children:
+                self.static_children.append(new_name)
 
         del self.children[old_name]
-        del self.static_children[old_name]
+        self.static_children.remove(old_name)
 
     def wstat(self,stat):
         # change uid?
@@ -121,10 +123,11 @@ class Inode(py9p.Dir):
             self.name = stat.name
 
     def sync(self):
+        print "sync for",self.name
         # create set of children names
         chs = set(self.children.keys())
         # create set of actual items
-        prs = set(self.sync_children() + self.static_children.keys())
+        prs = set(self.sync_children() + self.static_children)
 
         # inodes to delete
         to_delete = chs - prs
@@ -375,7 +378,7 @@ class v9fs(py9p.Server):
         f = self.storage.checkout(fd.qid.path)
         f.sync()
 
-        for (i,k) in f.children.items() + f.static_children.items():
+        for (i,k) in f.children.items():
             if req.ifcall.wname[0] == i:
                 req.ofcall.wqid.append(k.qid)
                 if k.qid.type & py9p.QTDIR:
@@ -422,8 +425,6 @@ class v9fs(py9p.Server):
             for (i,k) in f.children.items():
                 if i not in (".",".."):
                     req.ofcall.stat.append(k)
-            for (i,k) in f.static_children.items():
-                req.ofcall.stat.append(k)
         else:
             if req.ifcall.offset == 0:
                 f.sync()
