@@ -123,7 +123,6 @@ class Inode(py9p.Dir):
             self.name = stat.name
 
     def sync(self):
-        print "sync for",self.name
         # create set of children names
         chs = set(self.children.keys())
         # create set of actual items
