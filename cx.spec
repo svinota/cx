@@ -2,7 +2,7 @@
 
 Name: connexion
 Version: 0.7.1
-Release: alt3
+Release: alt4
 Summary: Python framework to build network-centric systems
 License: GPLv3
 Group: Development/Python
@@ -77,6 +77,13 @@ in Plan9, 9P can be used also for composite file access, RPC etc.
 %{python_sitelibdir}/py9p*
 
 %changelog
+* Thu Jul  7 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt4
+- iproute2 can add and delete addresses on interfaces
+- more attributes parsed by rtnl
+- wireless interfaces detection (ioctl) in rtnl
+- get/set attributes in attr_msg class
+- new utility function (make_map) that creates two-way mappings of set of attributes
+
 * Wed Jun 17 2011 Peter V. Saveliev <peet@altlinux.org> 0.7.1-alt3
 - cxkey utility added
 - named parameters for py9p.Dir
