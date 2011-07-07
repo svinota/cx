@@ -16,10 +16,80 @@ class RootDir(Inode):
         self.storage = storage
         self.child_map = {
             "README":       ReadmeInode,
-            "ifmap":        MapInode,
             "interfaces":   IfacesDir,
+            "by-hwaddr":    HwaddrDir,
+            "by-state":     StateDir,
+            "by-type":      TypeDir,
             "log":          LogInode,
         }
+
+
+class TypeDir(Inode):
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.child_map = {
+            "*":        IfacesTypeDir,
+        }
+
+    def sync_children(self):
+        l = list(set([ x['link_type'].lower() for x in iproute2.get_all_links() ]))
+        if len(set([ x['wireless'] for x in iproute2.get_all_links() ])) > 1:
+            l.append("wifi")
+        return l
+
+class StateDir(Inode):
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.child_map = {
+            "*":        IfacesStateDir,
+        }
+
+    def sync_children(self):
+        return list(set([ x['state'].lower() for x in iproute2.get_all_links() ]))
+
+class HwaddrDir(Inode):
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.child_map = {
+            "*":        IfacesHwDir,
+        }
+
+    def sync_children(self):
+        return list(set([ x['hwaddr'] for x in iproute2.get_all_links() ]))
+
+class IfacesTypeDir(Inode):
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.child_map = {
+            "*":        InterfaceDir,
+        }
+
+    def sync_children(self):
+        if self.name == 'wifi':
+            return [ x['dev'] for x in iproute2.get_all_links() if x['wireless'] is not None ]
+        else:
+            return [ x['dev'] for x in iproute2.get_all_links() if x['link_type'] == self.name.upper() ]
+
+class IfacesStateDir(Inode):
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.child_map = {
+            "*":        InterfaceDir,
+        }
+
+    def sync_children(self):
+        return [ x['dev'] for x in iproute2.get_all_links() if x['state'] == self.name.upper() ]
+
+class IfacesHwDir(Inode):
+    def __init__(self,name,parent):
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.child_map = {
+            "*":        InterfaceDir,
+        }
+
+    def sync_children(self):
+        return [ x['dev'] for x in iproute2.get_all_links() if x['hwaddr'] == self.name ]
+
 
 class IfacesDir(Inode):
     def __init__(self,name,parent):
@@ -40,6 +110,7 @@ class MapInode(Inode):
 class InterfaceDir(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.ifname = name
         self.child_map = {
             "addresses":    AdressesInode,
             "flags":        FlagsInode,
@@ -91,32 +162,32 @@ class ReadmeInode(Inode):
 class InterfaceInode(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent)
-        self.iface = self.parent.name
+        self.ifname = self.parent.ifname
         self.addresses = []
 
 class MtuInode(InterfaceInode):
     def sync(self):
         self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
-        self.data.write(str(iproute2.get_link(self.iface)['mtu']))
+        self.data.write(str(iproute2.get_link(self.ifname)['mtu']))
 
 class FlagsInode(InterfaceInode):
     def sync(self):
         self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
-        self.data.write(",".join(iproute2.get_link(self.iface)['flags']))
+        self.data.write(",".join(iproute2.get_link(self.ifname)['flags']))
 
 class HwAddressInode(InterfaceInode):
     def sync(self):
         self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
-        self.data.write(iproute2.get_link(self.iface)['hwaddr'])
+        self.data.write(iproute2.get_link(self.ifname)['hwaddr'])
 
 class AdressesInode(InterfaceInode):
 
     def sync(self):
         s = ""
-        self.addresses = [ "%s/%s" % (x['local'],x['mask']) for x in iproute2.get_addr(self.iface) if x.has_key('local') ]
+        self.addresses = [ "%s/%s" % (x['local'],x['mask']) for x in iproute2.get_addr(self.ifname) if x.has_key('local') ]
         for x in self.addresses:
             s += "%s\n" % (x)
         self.data.seek(0,os.SEEK_SET)
