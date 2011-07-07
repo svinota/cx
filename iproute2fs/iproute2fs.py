@@ -24,74 +24,53 @@ class RootDir(Inode):
         }
 
 
-class TypeDir(Inode):
+class MappingDir(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
         self.child_map = {
-            "*":        IfacesTypeDir,
+            "*":        self.fmap,
         }
 
-    def sync_children(self):
-        l = list(set([ x['link_type'].lower() for x in iproute2.get_all_links() ]))
-        if len(set([ x['wireless'] for x in iproute2.get_all_links() ])) > 1:
-            l.append("wifi")
-        return l
-
-class StateDir(Inode):
-    def __init__(self,name,parent):
-        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
-        self.child_map = {
-            "*":        IfacesStateDir,
-        }
-
-    def sync_children(self):
-        return list(set([ x['state'].lower() for x in iproute2.get_all_links() ]))
-
-class HwaddrDir(Inode):
-    def __init__(self,name,parent):
-        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
-        self.child_map = {
-            "*":        IfacesHwDir,
-        }
-
-    def sync_children(self):
-        return list(set([ x['hwaddr'] for x in iproute2.get_all_links() ]))
-
-class IfacesTypeDir(Inode):
+class FilterDir(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
         self.child_map = {
             "*":        InterfaceDir,
         }
 
+###
+#
+# Filters for interfaces
+#
+class IfacesTypeDir(FilterDir):
+    """
+    Filter interfaces by types
+    """
     def sync_children(self):
         if self.name == 'wifi':
             return [ x['dev'] for x in iproute2.get_all_links() if x['wireless'] is not None ]
         else:
             return [ x['dev'] for x in iproute2.get_all_links() if x['link_type'] == self.name.upper() ]
 
-class IfacesStateDir(Inode):
-    def __init__(self,name,parent):
-        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
-        self.child_map = {
-            "*":        InterfaceDir,
-        }
-
+class IfacesStateDir(FilterDir):
+    """
+    Filter interfaces by state
+    """
     def sync_children(self):
         return [ x['dev'] for x in iproute2.get_all_links() if x['state'] == self.name.upper() ]
 
-class IfacesHwDir(Inode):
-    def __init__(self,name,parent):
-        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
-        self.child_map = {
-            "*":        InterfaceDir,
-        }
-
+class IfacesHwDir(FilterDir):
+    """
+    Filter interfaces by hardware address
+    """
     def sync_children(self):
         return [ x['dev'] for x in iproute2.get_all_links() if x['hwaddr'] == self.name ]
 
 
 class IfacesDir(Inode):
+    """
+    Just all interfaces, not filtered
+    """
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
         self.child_map = {
@@ -101,12 +80,44 @@ class IfacesDir(Inode):
     def sync_children(self):
         return [ x['dev'] for x in iproute2.get_all_links() ]
 
-class MapInode(Inode):
-    def sync(self):
-        self.data.seek(0,os.SEEK_SET)
-        self.data.truncate()
-        [ self.data.write("%-16s\t%-17s\n" % (x,y)) for x,y in [ (z["dev"],z["hwaddr"]) for z in iproute2.get_all_links() ] ]
 
+###
+#
+# Mapping containers
+#
+class TypeDir(MappingDir):
+    """
+    Create map of current interface types from 'link_type' and 'wireless' fields
+    """
+    fmap = IfacesTypeDir
+    def sync_children(self):
+        l = list(set([ x['link_type'].lower() for x in iproute2.get_all_links() ]))
+        if len(set([ x['wireless'] for x in iproute2.get_all_links() ])) > 1:
+            l.append("wifi")
+        return l
+
+class StateDir(MappingDir):
+    """
+    Create map of interface states
+    """
+    fmap = IfacesStateDir
+    def sync_children(self):
+        return list(set([ x['state'].lower() for x in iproute2.get_all_links() ]))
+
+class HwaddrDir(MappingDir):
+    """
+    Map of hardware addresses
+    """
+    fmap = IfacesHwDir
+    def sync_children(self):
+        return list(set([ x['hwaddr'] for x in iproute2.get_all_links() ]))
+
+
+
+###
+#
+#
+#
 class InterfaceDir(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
