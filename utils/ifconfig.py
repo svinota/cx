@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 An isolated code from http://git.fedorahosted.org/git/?p=vdsm.git;a=blob;f=vdsm/netinfo.py
 
@@ -42,3 +43,15 @@ def ifconfig():
                          netmask = v
          ifaces[name] = {'addr': addr, 'netmask': netmask, 'hwaddr': hwaddr}
      return ifaces
+
+
+from nlconfig import nlconfig
+
+import timeit
+
+i = timeit.Timer("ifconfig()","from __main__ import ifconfig")
+n = timeit.Timer("nlconfig()","from __main__ import nlconfig")
+print i.timeit(100)
+print n.timeit(100)
+print ifconfig()
+print nlconfig()
