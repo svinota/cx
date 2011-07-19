@@ -38,6 +38,7 @@ from ctypes import CDLL, Structure, Union
 from ctypes import string_at, create_string_buffer, sizeof, addressof, byref
 from ctypes import c_byte, c_ubyte, c_ushort, c_int, c_uint8, c_uint16, c_uint32
 from socket import AF_NETLINK, SOCK_RAW
+from copy import copy
 
 __all__ = [ "nlconfig" ]
 
@@ -258,7 +259,7 @@ def nl_parse(msg):
             # despite of IPv4 only group subscription)
             return None
         m = ( 0xffffffff << ( 32 - msg.data.address.prefixlen ) ) & 0xffffffff
-        r["mask"] = "%i.%i.%i.%i" % tuple(reversed([ (m >> (8*x)) & 0xff for x in range(4) ])) 
+        r["mask"] = "%i.%i.%i.%i" % tuple(reversed([ (m >> (8*x)) & 0xff for x in range(4) ]))
         bias = ifaddrmsg
         at = t_ifa_attr
     else:
@@ -363,7 +364,12 @@ def nlconfig():
     # get only devices list, map them to a dictionary
     [ ret.__setitem__(x['dev'],x) for x in nl_get(s) if x.has_key('dev') ]
     # clean up
-    [ (ret[x].__delitem__('dev'),ret[x].__delitem__('type')) for x in ret.keys() ]
+    [ (
+        ret[x].__delitem__('dev'),
+        ret[x].__delitem__('type'),
+        ret[x].__setitem__('netmask',''),
+        ret[x].__setitem__('addr','')
+      ) for x in ret.keys() ]
     # fix hwaddr for loopback: the original ifconfig returns an empty string
     if ret.has_key("lo"):
         ret["lo"]["hwaddr"] = ""
@@ -375,7 +381,7 @@ def nlconfig():
     # get addrs
     result = nl_get(s)
     # emulate "alias interfaces" *)
-    [ ret.__setitem__(x,ret[x[:x.find(":")]]) for x in 
+    [ ret.__setitem__(x,copy(ret[x[:x.find(":")]])) for x in
         [ y["dev"] for y in result if y.has_key("dev")] if x.find(":") > -1 ]
     # put addresses by interfaces (and aliases)
     [ (
