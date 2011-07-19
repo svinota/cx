@@ -56,7 +56,7 @@ Limitations:
 
 
 from ctypes import CDLL, Structure, Union
-from ctypes import string_at, create_string_buffer, sizeof, addressof, byref
+from ctypes import string_at, sizeof, addressof, byref
 from ctypes import c_byte, c_ubyte, c_ushort, c_int, c_uint8, c_uint16, c_uint32
 from socket import AF_NETLINK, SOCK_RAW
 from copy import copy
@@ -263,8 +263,6 @@ def nl_parse(msg):
     """
     r = {}
     t = msg.hdr.type
-
-    direct = {}
 
     ## message type
     if \
