@@ -365,8 +365,10 @@ def nlconfig():
     [ ret.__setitem__(x['dev'],x) for x in nl_get(s) if x.has_key('dev') ]
     # clean up
     [ (
+        # remove internal info
         ret[x].__delitem__('dev'),
         ret[x].__delitem__('type'),
+        # add empty netmask and addr, as it does ifconfig routine
         ret[x].__setitem__('netmask',''),
         ret[x].__setitem__('addr','')
       ) for x in ret.keys() ]
@@ -385,9 +387,15 @@ def nlconfig():
         [ y["dev"] for y in result if y.has_key("dev")] if x.find(":") > -1 ]
     # put addresses by interfaces (and aliases)
     [ (
+        # use a label to identify an interface
+        #
+        # strictly speaking, it is not correct, we should use interface
+        # indexes, but here we emulate ifconfig...
         ret[x['dev']].__setitem__("addr",x['local']),
         ret[x['dev']].__setitem__("netmask",x['mask'])
       ) for x in
+        # fetch only the first address for an interface (or alias), just as
+        # ifconfig does. All secondary addresses in this case are ignored.
         result if x['type'] == 'address' and ret[x['dev']]['addr'] == ""
         ]
 
