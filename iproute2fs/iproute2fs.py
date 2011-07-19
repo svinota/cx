@@ -15,10 +15,7 @@ class RootDir(Inode):
         Inode.__init__(self,"/",self,qtype=py9p.DMDIR,storage=storage)
         self.storage = storage
         self.child_map = {
-            "README":       ReadmeInode,
             "interfaces":   IfacesDir,
-            "by-hwaddr":    HwaddrDir,
-            "by-state":     StateDir,
             "by-type":      TypeDir,
             "log":          LogInode,
         }
@@ -52,31 +49,11 @@ class IfacesTypeDir(FilterDir):
         else:
             return [ x['dev'] for x in iproute2.get_all_links() if x['link_type'] == self.name.upper() ]
 
-class IfacesStateDir(FilterDir):
-    """
-    Filter interfaces by state
-    """
-    def sync_children(self):
-        return [ x['dev'] for x in iproute2.get_all_links() if x['state'] == self.name.upper() ]
 
-class IfacesHwDir(FilterDir):
-    """
-    Filter interfaces by hardware address
-    """
-    def sync_children(self):
-        return [ x['dev'] for x in iproute2.get_all_links() if x['hwaddr'] == self.name ]
-
-
-class IfacesDir(Inode):
+class IfacesDir(FilterDir):
     """
     Just all interfaces, not filtered
     """
-    def __init__(self,name,parent):
-        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
-        self.child_map = {
-            "*":        InterfaceDir,
-        }
-
     def sync_children(self):
         return [ x['dev'] for x in iproute2.get_all_links() ]
 
@@ -96,38 +73,11 @@ class TypeDir(MappingDir):
             l.append("wifi")
         return l
 
-class StateDir(MappingDir):
-    """
-    Create map of interface states
-    """
-    fmap = IfacesStateDir
-    def sync_children(self):
-        return list(set([ x['state'].lower() for x in iproute2.get_all_links() ]))
-
-class HwaddrDir(MappingDir):
-    """
-    Map of hardware addresses
-    """
-    fmap = IfacesHwDir
-    def sync_children(self):
-        return list(set([ x['hwaddr'] for x in iproute2.get_all_links() ]))
-
-
 
 ###
 #
 #
 #
-class InterfaceDir(Inode):
-    def __init__(self,name,parent):
-        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
-        self.ifname = name
-        self.child_map = {
-            "addresses":    AdressesInode,
-            "flags":        FlagsInode,
-            "mtu":          MtuInode,
-            "hwaddr":       HwAddressInode,
-        }
 
 class LogInode(Inode):
     def sync(self):
@@ -143,41 +93,47 @@ class LogInode(Inode):
 #
 #
 #
-class FileInode(Inode):
+class InterfaceDir(Inode):
+    """
+    Minimal interface representation. This directory contains
+    some basic properties, as IP addresses and so on. The
+    directory is named after interface label.
+    """
     def __init__(self,name,parent):
-        Inode.__init__(self,name,parent)
-        f = open(self.fname,"r")
-        self.data = StringIO(f.read())
+        Inode.__init__(self,name,parent,qtype=py9p.DMDIR)
+        self.ifname = name
+        self.child_map = {
+            "addresses":    AdressesInode,
+            "flags":        FlagsInode,
+            "mtu":          MtuInode,
+            "hwaddr":       HwAddressInode,
+        }
 
-class ReadmeInode(FileInode):
-    fname = "README"
-
-
-class InterfaceInode(Inode):
+class PropertyInode(Inode):
     def __init__(self,name,parent):
         Inode.__init__(self,name,parent)
         self.ifname = self.parent.ifname
         self.addresses = []
 
-class MtuInode(InterfaceInode):
+class MtuInode(PropertyInode):
     def sync(self):
         self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
         self.data.write(str(iproute2.get_link(self.ifname)['mtu']))
 
-class FlagsInode(InterfaceInode):
+class FlagsInode(PropertyInode):
     def sync(self):
         self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
         self.data.write(",".join(iproute2.get_link(self.ifname)['flags']))
 
-class HwAddressInode(InterfaceInode):
+class HwAddressInode(PropertyInode):
     def sync(self):
         self.data.seek(0,os.SEEK_SET)
         self.data.truncate()
         self.data.write(iproute2.get_link(self.ifname)['hwaddr'])
 
-class AdressesInode(InterfaceInode):
+class AdressesInode(PropertyInode):
 
     def sync(self):
         s = ""
