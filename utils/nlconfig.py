@@ -209,7 +209,7 @@ def t_l2ad(address):
     Parse MAC address attribute
     """
     r = (c_uint8 * 6).from_address(address + sizeof(nlattr))
-    return "%02X:%02X:%02X:%02X:%02X:%02X" % (r[0], r[1], r[2], r[3], r[4], r[5])
+    return "%02x:%02x:%02x:%02x:%02x:%02x" % (r[0], r[1], r[2], r[3], r[4], r[5])
 def t_asciiz(address):
     """
     Parse a zero-terminated string
@@ -366,8 +366,10 @@ def nlconfig():
     [ ret.__setitem__(x['dev'],x) for x in nl_get(s) if x.has_key('dev') ]
     # clean up
     [ (
+        # remove internal info
         ret[x].__delitem__('dev'),
         ret[x].__delitem__('type'),
+        # add empty netmask and addr, as it does ifconfig routine
         ret[x].__setitem__('netmask',''),
         ret[x].__setitem__('addr','')
       ) for x in ret.keys() ]
@@ -386,10 +388,17 @@ def nlconfig():
         [ y["dev"] for y in result if y.has_key("dev")] if x.find(":") > -1 ]
     # put addresses by interfaces (and aliases)
     [ (
+        # use a label to identify an interface
+        #
+        # strictly speaking, it is not correct, we should use interface
+        # indexes, but here we emulate ifconfig...
         ret[x['dev']].__setitem__("addr",x['local']),
         ret[x['dev']].__setitem__("netmask",x['mask'])
       ) for x in
-        result if x['type'] == 'address' ]
+        # fetch only the first address for an interface (or alias), just as
+        # ifconfig does. All secondary addresses in this case are ignored.
+        result if x['type'] == 'address' and ret[x['dev']]['addr'] == ""
+        ]
 
     #
     # *) actually, "alias interfaces" model is deprecated
