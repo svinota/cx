@@ -1,4 +1,24 @@
 #!/usr/bin/env python
+#
+#     Copyright (c) 2011 Red Hat, Inc; ALT Linux Team; Peter V. Saveliev
+#
+#     This file was written for VDSM project and uses code from Connexion
+#     library.
+#
+#     Connexion is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     Connexion is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with Connexion; if not, write to the Free Software
+#     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
 """
 Extra light, simple and fast library to acquire interfaces and addresses
 via RT Netlink protocol. It is simplified up to the edge to fit partial
@@ -33,6 +53,7 @@ Limitations:
  * returns netmask in dotted quad notation - format restriction
 
 """
+
 
 from ctypes import CDLL, Structure, Union
 from ctypes import string_at, create_string_buffer, sizeof, addressof, byref
