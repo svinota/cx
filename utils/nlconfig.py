@@ -249,6 +249,7 @@ def nl_parse(msg):
     if \
         t <= RTM_DELLINK:
         r["type"] = "link"
+        r["hwaddr"] = ""
         bias = ifinfmsg
         at = t_ifla_attr
     elif \
