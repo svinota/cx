@@ -44,6 +44,20 @@ def ifconfig():
          ifaces[name] = {'addr': addr, 'netmask': netmask, 'hwaddr': hwaddr}
      return ifaces
 
+import ethtool
+
+def etconfig():
+
+    ifaces = {}
+    for i in ethtool.get_devices():
+        ifo = []
+        for k in (ethtool.get_ipaddr,ethtool.get_netmask,ethtool.get_hwaddr):
+            try:
+                ifo.append(k(i))
+            except:
+                ifo.append('')
+        ifaces[i] = {'addr': ifo[0], 'netmask': ifo[1], 'hwaddr': ifo[2]}
+    return ifaces
 
 from nlconfig import nlconfig
 
@@ -51,7 +65,10 @@ import timeit
 
 i = timeit.Timer("ifconfig()","from __main__ import ifconfig")
 n = timeit.Timer("nlconfig()","from __main__ import nlconfig")
+e = timeit.Timer("etconfig()","from __main__ import etconfig")
 print i.timeit(100)
 print n.timeit(100)
+print e.timeit(100)
 print ifconfig()
 print nlconfig()
+print etconfig()
