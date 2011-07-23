@@ -21,25 +21,48 @@
 #     along with Connexion; if not, write to the Free Software
 #     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-from ctypes import CDLL, Structure
-from ctypes import byref, sizeof
-from ctypes import c_short, c_ushort, c_byte, c_ulong
-from cxnet.utils import dqn_to_int
-from cxnet.common import hprint
-from socket import htons, htonl, AF_INET, SOCK_STREAM
+from __future__ import print_function
+
+# ctypes structures
+from ctypes import Structure, Union
+# ctypes functions
+from ctypes import byref, sizeof, create_string_buffer
+# ctypes simple types
+from ctypes import c_short, c_ushort, c_byte, c_ulong, c_uint32, c_uint16, c_ubyte, c_uint64, c_uint8
+
+from cxnet.utils import dqn_to_int, hprint, hline
+from cxnet.common import libc
+from socket import htons, htonl, ntohs, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
+
+MAX_MSG_SIZE = 8192
 
 __all__ = [ "p9socket" ]
-
-libc = CDLL("libc.so.6")
 
 class sockaddr_in (Structure):
     _pack_ = 2
     _fields_ = [
-        ("sin_family", c_short),        # AF_INET etc...
-        ("sin_port", c_ushort),         # port number
-        ("sin_addr", c_ulong),          # ip address
-        ("sin_zero", (c_byte * 8)),
+        ("sin_family", c_uint16),        # AF_INET etc...
+        ("sin_port", c_uint16),          # port number
+        ("sin_addr", c_uint32),          # ip address
+        ("sin_zero", (c_uint8 * 8)),
     ]
+
+class p9msg (Structure):
+    """
+    http://man.cat-v.org/plan_9/5/intro
+    http://swtch.com/plan9port/man/man3/fcall.html
+    """
+    _fields_ = [
+        ("size", c_uint32),
+        ("type", c_ubyte),
+        ("tag", c_uint16),
+        ("data", (c_ubyte * MAX_MSG_SIZE)),
+    ]
+
+    def __str__(self):
+        ret = hline(self,self.size)
+        ret += "size: %s, type: %s, tag: %s\n" % (self.size, self.type, self.tag)
+        return ret
 
 class p9socket (object):
     """
@@ -52,11 +75,14 @@ class p9socket (object):
         Create and bind socket structure
         """
         self.fd = libc.socket(AF_INET,SOCK_STREAM,0)
+        libc.setsockopt(self.fd, SOL_SOCKET, SO_REUSEADDR, byref(c_uint32(1)), sizeof(c_uint32))
 
         sa = sockaddr_in()
         sa.sin_family = AF_INET
         sa.sin_port = htons(port)
         sa.sin_addr = htonl(dqn_to_int(address))
+
+        self.sa = sa
 
         l = libc.bind(self.fd, byref(sa), sizeof(sa))
         if l != 0:
@@ -82,54 +108,24 @@ class p9socket (object):
         libc.listen(self.fd,10)
         while True:
             sa = sockaddr_in()
-            s = libc.accept(self.fd, byref(sa), sizeof(sa))
-            print sa.sin_port
-            print sa.sin_addr
+            s = libc.accept(self.fd, byref(sa), byref(c_uint32(sizeof(sa))))
+            (l,msg) = self.recv(s)
+            print("got message of",l,"bytes")
+            print(msg)
             libc.close(s)
 
 
-    def recv(self):
+    def recv(self,socket):
         """
-        Receive a packet from Netlink socket (using recvfrom(2))
         """
-        msg = self.msg()
-        l = libc.recvfrom(self.fd, byref(msg), sizeof(msg), 0, 0, 0)
-
-        if l == -1:
-            msg = None
-        else:
-            if (msg.hdr.type == NLMSG_NOOP):
-                msg = None
-            elif (msg.hdr.type == NLMSG_ERROR):
-                error = nlmsgerr.from_address(addressof(msg.data))
-                raise Exception("Netlink error %i" % (error.code))
+        msg = p9msg()
+        l = libc.recv(socket, byref(msg), sizeof(msg), 0)
 
         return (l,msg)
 
     def send(self, msg, size=0):
         """
-        Send a packet through Netlink socket
         """
-
-        if not size:
-            size = sizeof(msg)
-
-        sa = sockaddr()
-        sa.family = AF_NETLINK
-        sa.pid = 0
-
-        self.prepare(msg, size)
-
-        l = libc.sendto(self.fd, byref(msg), size, 0, byref(sa), sizeof(sa))
+        l = libc.send(self.fd, byref(msg), size, 0)
         return l
 
-    def prepare(self, msg, size=0):
-        """
-        Adjust message header fields before sending
-        """
-
-        if not size:
-            size = sizeof(msg)
-
-        msg.hdr.length = size
-        msg.hdr.pid = getpid()
