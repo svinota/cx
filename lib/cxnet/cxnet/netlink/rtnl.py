@@ -444,7 +444,7 @@ class rtnl_msg_parser(object):
         "add":  {
             "address":  RTM_NEWADDR,
             },
-        "del":  {
+        "remove":  {
             "address":  RTM_DELADDR,
             }
     }
@@ -532,15 +532,13 @@ class rtnl_msg_parser(object):
             bias = ndmsg
             at = t_nda_attr
         else:
-            r["type"] = "fake"
-            r["action"] = "fake"
-            return r
+            r["type"] = "unknown"
 
         ## message action
         if t in aa:
             r["action"] = "add"
         elif t in ad:
-            r["action"] = "del"
+            r["action"] = "remove"
 
         msg.setup(addressof(msg) + sizeof(nlmsghdr) + sizeof(bias),direct,reverse)
 
