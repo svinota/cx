@@ -1,4 +1,5 @@
 A collection of Python libraries…
+=================================
 
     cxnet — network library: constants, packet structures
     cxnet/netlink — netlink, the Linux' kernel proto:
@@ -14,7 +15,7 @@ A collection of Python libraries…
 
     storage/statfs — taskstats-based FUSE filesystem
 
-… and tons of testing code.
+… and tons of testing code. To be cleaned up soon.
 
 The primary repo of the project is here:
     http://projects.radlinux.org/cx/,
@@ -22,3 +23,14 @@ The primary repo of the project is here:
 It is synchronized with secondary repos:
     https://github.com/svinota/cx
     http://git.altlinux.org/people/peet/packages/?p=cx.git;a=summary
+
+Maillist
+========
+
+https://groups.google.com/group/connexion-project/
+
+Issues
+======
+
+http://projects.radlinux.org/cx/newticket
+https://github.com/svinota/cx/issues
