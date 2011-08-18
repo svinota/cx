@@ -12,7 +12,11 @@ from cStringIO import StringIO
 import getopt
 import getpass
 
-from cxnet.netlink.taskstats import *
+from ctypes import addressof, sizeof, c_uint32
+
+from cxnet.netlink.core import nlattr, NLMSG_ALIGN
+from cxnet.netlink.generic import genl_socket
+from cxnet.netlink.taskstats import taskstatsmsg, TASKSTATS_CMD_GET, TASKSTATS_TYPE_PID
 
 DEFAULT_DIR_MODE = 0750
 DEFAULT_FILE_MODE = 0640
@@ -25,7 +29,8 @@ class Taskstats(object):
 
 
     def get(self,pid):
-        (l,msg) = self.s.send_cmd(self.prid,TASKSTATS_CMD_GET,TASKSTATS_TYPE_PID,c_uint32(pid))
+        self.s.send_cmd(self.prid,TASKSTATS_CMD_GET,TASKSTATS_TYPE_PID,c_uint32(pid))
+        (l,msg) = self.s.recv()
         # hprint(msg,l)
         a = nlattr.from_address(addressof(msg.data))
         pid = nlattr.from_address(addressof(msg.data) + sizeof(a))
@@ -122,7 +127,7 @@ class TaskstatsInode(Inode):
         self.pid = pid
 
     def sync(self):
-        self.data = StringIO(taskstats.get(int(self.pid)).sprint())
+        self.data = StringIO(str(taskstats.get(int(self.pid))))
         self.data.seek(0)
 
 class Storage(object):
