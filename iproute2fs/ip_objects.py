@@ -2,9 +2,10 @@
 
 from __future__ import print_function
 from cxnet.netlink.iproute2 import iproute2
-from ip_playback import playback
+from ip_playback import sync
 from ip_interface import interface
 from time import sleep
+from pprint import pprint
 
 #
 # startup: init objects
@@ -20,10 +21,11 @@ print("8<-------------------- init results")
 #
 print("8<-------------------- sleep")
 sleep(20)
-playback(ifaces)
 print("8<-------------------- log playback")
+sync(ifaces)
 print("8<-------------------- playback results")
-[ print(x) for x in ifaces.items() ]
+pprint(ifaces)
+
 #
 # results
 #
