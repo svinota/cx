@@ -54,6 +54,7 @@ class Inode(py9p.Dir):
 
         self.storage.register(self)
         self.child_map = {}
+        self.subst_map = {}
 
     def absolute_name(self):
         if (self.parent is not None) and (self.parent != self):
@@ -73,6 +74,9 @@ class Inode(py9p.Dir):
             del self.children[child.name]
 
     def create(self,name,qtype=0):
+        # get additional parameters by name, if there is what to get
+        if self.subst_map.has_key(name):
+            name = self.subst_map[name]
         # return a specific class
         if self.child_map.has_key(name):
             return self.child_map[name](name,self)
@@ -143,7 +147,7 @@ class Inode(py9p.Dir):
         # add to storage
         [ self.storage.register(x) for x in [ self.children[y] for y in to_create ] ]
 
-        [ self.children[x].sync() for x in to_create ]
+        [ self.children[y].sync() for x in to_create ]
 
     @property
     def length(self):
