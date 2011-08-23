@@ -5,8 +5,11 @@ import sys
 import getopt
 import os
 
+from threading import Thread
+
 from vfs import Inode, Storage, v9fs
 from ip_interface import interface, InterfaceInode
+from ip_playback import sync
 
 from cStringIO import StringIO
 
@@ -31,7 +34,7 @@ class InterfacesDir(Inode):
 
 
     def sync_children(self):
-        return [ x["dev"] for x in self.ifaces.values() ]
+        return [ x['dev'] for x in self.ifaces.values() if x.has_key('dev') ]
 
 if __name__ == "__main__" :
 
@@ -59,10 +62,16 @@ if __name__ == "__main__" :
     srv = py9p.Server(listen=(address, port), chatty=dbg, dotu=True)
     srv.mount(v9fs(storage))
 
-    ifaces = dict([ (x['index'],interface(x)) for x in iproute2.get_all_links() ])
-    [ ifaces[x['index']]['addresses'].append(x) for x in iproute2.get_all_addrs() ]
+    ifaces = {}
+    ifaces['by-name'] = dict([ (x['dev'],x) for x in ifaces.values() ])
+    iproute2.get_all_links()
+    iproute2.get_all_addrs()
     storage.root.sync()
     storage.root.children["interfaces"].ifaces = ifaces
-    storage.root.children["interfaces"].subst_map = dict([ (x["dev"],x) for x in ifaces.values() ])
+    storage.root.children["interfaces"].subst_map = ifaces['by-name']
+
+    s = Thread(target=sync,name="sync thread",args=(ifaces,True))
+    s.daemon = True
+    s.start()
 
     srv.serve()

@@ -12,25 +12,30 @@ class sync_map:
         def add(event,ifaces):
             print("add interface %s" % (event['dev']))
             if not ifaces.has_key(event['index']):
-                ifaces[event['index']] = interface(event)
+                ifaces['by-name'][event['dev']] = ifaces[event['index']] = interface(event)
             else:
                 print("already exists, skippin'")
         def remove(event,ifaces):
             print("remove interface %s" % (event['dev']))
             del ifaces[event['index']]
+            del ifaces['by-name'][event['dev']]
 
     @vars
     class address:
         def add(event,ifaces):
-            print("add address %s" % (event['local']))
-            ifaces[event['index']]['addresses'].append(event)
+            if event.has_key('local'):
+                key = '%s/%s' % (event['local'],event['mask'])
+            else:
+                key = '%s/%s' % (event['address'],event['mask'])
+            print("add address %s" % (key))
+            ifaces[event['index']]['addresses'][key] = event
         def remove(event,ifaces):
-            print("remove address %s" % (event['local']))
-            [ ifaces[event['index']]['addresses'].remove(x) for x in ifaces[event['index']]['addresses']
-                if
-                    dict([ (y,z) for (y,z) in x.items() if y not in ('timestamp','action') ]) ==
-                    dict([ (y,z) for (y,z) in event.items() if y not in ('timestamp','action') ])
-            ]
+            if event.has_key('local'):
+                key = '%s/%s' % (event['local'],event['mask'])
+            else:
+                key = '%s/%s' % (event['address'],event['mask'])
+            print("remove address %s" % (key))
+            del ifaces[event['index']]['addresses'][key]
 
     @vars
     class neigh:
@@ -46,9 +51,9 @@ class sync_map:
         def remove(*argv):
             pass
 
-def sync(ifaces):
+def sync(ifaces,blocking=False):
     while True:
-        events = iproute2.get(blocking=False)
+        events = iproute2.get(0,blocking)
         if len(events) == 0:
             break
         for event in events:

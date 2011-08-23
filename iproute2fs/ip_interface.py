@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from vfs import Inode
+from cxnet.netlink.iproute2 import iproute2
 import py9p
 import os
 
@@ -16,7 +17,7 @@ class interface(dict):
     """
     def __init__(self,rt_dict):
         dict.__init__(self,rt_dict)
-        self["addresses"] = []
+        self['addresses'] = {}
 
     def __hash__(self):
         return hash(self.__getitem__("dev"))
@@ -54,7 +55,7 @@ class AdressesInode(Inode):
 
     def sync(self):
         s = ""
-        self.addresses = [ "%s/%s" % (x['address'],x['mask']) for x in self.parent.interface["addresses"] ]
+        self.addresses = [ "%s/%s" % (x['address'],x['mask']) for x in self.parent.interface['addresses'].values() ]
         for x in self.addresses:
             s += "%s\n" % (x)
         self.data.seek(0,os.SEEK_SET)
@@ -68,5 +69,9 @@ class AdressesInode(Inode):
         prs = set([ x.strip() for x in self.data.readlines() ])
         to_delete = chs - prs
         to_create = prs - chs
-        [ iproute2.del_addr(self.iface,x) for x in to_delete ]
-        [ iproute2.add_addr(self.iface,x) for x in to_create ]
+        try:
+            [ iproute2.del_addr(self.parent.interface['dev'],x) for x in to_delete ]
+            [ iproute2.add_addr(self.parent.interface['dev'],x) for x in to_create ]
+        except Exception,e:
+            print e
+
