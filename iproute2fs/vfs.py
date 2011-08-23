@@ -137,7 +137,7 @@ class Inode(py9p.Dir):
         # preserve special names
         [ to_delete.remove(x) for x in self.special_names ]
         # remove from storage
-        [ self.storage.unregister(x) for x in [ self.children[y].qid.path for y in to_delete ] ]
+        [ self.storage.unregister(x) for x in [ self.children[y] for y in to_delete ] ]
         # remove from children
         [ self.children.__delitem__(x) for x in to_delete ]
         # inodes to create
