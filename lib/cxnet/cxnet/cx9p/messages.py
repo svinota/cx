@@ -27,7 +27,7 @@ http://swtch.com/plan9port/man/man3/fcall.html
 
 
 # ctypes types and functions
-from ctypes import c_ubyte, c_char, c_uint16, c_uint32
+from ctypes import c_ubyte, c_char, c_uint16, c_uint32, c_uint64
 
 # 9P uses little-endian meta data
 from ctypes import LittleEndianStructure as Structure
@@ -86,6 +86,21 @@ class p9msgarray (Structure):
         Returns a byte array type of the corresponding length.
         """
         return c_ubyte * self.len
+
+class p9qid (Structure):
+    """
+    The 9P qid type.
+
+    The qid represents the server's unique identification for the file
+    being accessed: two files on the same server hierarchy are the same
+    if and only if their qids are the same.
+    """
+    _pack_ = 1
+    _fields_ = [
+        ("type", c_ubyte),
+        ("version", c_uint32),
+        ("path", c_uint64),
+    ]
 
 
 # The 9P version implemented
