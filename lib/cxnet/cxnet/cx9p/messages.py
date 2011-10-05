@@ -34,7 +34,7 @@ from ctypes import LittleEndianStructure as Structure
 
 # The maximum message size is 8192 bytes
 MAX_MSG_SIZE = 8192
-__all__ += ["MAX_MSG_SIZE"]
+__all__ = ["MAX_MSG_SIZE"]
 
 class p9msg (Structure):
     """
