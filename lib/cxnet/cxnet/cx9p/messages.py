@@ -334,8 +334,13 @@ class Rread (Structure):
     _pack_ = 1
     _fields_ = [
         ("count", c_uint32),
-        ("data", ),
     ]
+
+    def cdarclass (self):
+        """
+        Returns the type of the message tail ``data``
+        """
+        return (c_ubyte * count)
 
 
 class Terror (Structure):
@@ -455,8 +460,13 @@ class Twrite (Structure):
         ("fid", c_uint32),
         ("offset", c_uint64),
         ("count", c_uint32),
-        ("data", ),
     ]
+
+    def cdarclass (self):
+        """
+        Returns the type of the message tail ``data``
+        """
+        return (c_ubyte * count)
 
 class Rwrite (Structure):
     """
