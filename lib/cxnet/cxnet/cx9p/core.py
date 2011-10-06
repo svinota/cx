@@ -26,7 +26,7 @@ from __future__ import print_function
 # ctypes structures
 from ctypes import Structure, Union
 # ctypes functions
-from ctypes import byref, sizeof, create_string_buffer
+from ctypes import byref, sizeof, create_string_buffer, resize
 # ctypes simple types
 from ctypes import c_short, c_ushort, c_byte, c_ulong, c_uint32, c_uint16, c_ubyte, c_uint64, c_uint8
 
@@ -34,7 +34,8 @@ from cxnet.utils import dqn_to_int, hprint, hline
 from cxnet.common import libc
 from socket import htons, htonl, ntohs, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 
-MAX_MSG_SIZE = 8192
+from messages import *
+from mempair import *
 
 __all__ = [ "p9socket" ]
 
@@ -46,23 +47,6 @@ class sockaddr_in (Structure):
         ("sin_addr", c_uint32),          # ip address
         ("sin_zero", (c_uint8 * 8)),
     ]
-
-class p9msg (Structure):
-    """
-    http://man.cat-v.org/plan_9/5/intro
-    http://swtch.com/plan9port/man/man3/fcall.html
-    """
-    _fields_ = [
-        ("size", c_uint32),
-        ("type", c_ubyte),
-        ("tag", c_uint16),
-        ("data", (c_ubyte * MAX_MSG_SIZE)),
-    ]
-
-    def __str__(self):
-        ret = hline(self,self.size)
-        ret += "size: %s, type: %s, tag: %s\n" % (self.size, self.type, self.tag)
-        return ret
 
 class p9socket (object):
     """
@@ -109,23 +93,42 @@ class p9socket (object):
         while True:
             sa = sockaddr_in()
             s = libc.accept(self.fd, byref(sa), byref(c_uint32(sizeof(sa))))
-            (l,msg) = self.recv(s)
-            print("got message of",l,"bytes")
-            print(msg)
+            msg = self.recv(s)
+            if isinstance(msg.car(), Tversion):
+                print ("Requested 9P version: %s" % msg.cdr().cdr().car().raw)
+            else:
+                print("got message of",l,"bytes")
             libc.close(s)
 
 
     def recv(self,socket):
         """
         """
-        msg = p9msg()
-        l = libc.recv(socket, byref(msg), sizeof(msg), 0)
+        msgdata = (c_ubyte * NORM_MSG_SIZE)()
+        msg = mempair(p9msg, msgdata)
+        (baddr, blen) = msg.buf()
+        l = libc.recv(socket, baddr, blen, 0)
+        hdr = msg.car()
+        if l > sizeof(hdr):
+            if hdr.size > l:
+                if hdr.size > MAX_MSG_SIZE:
+                    raise IOError ("The message is too large: %d bytes" % hdr.size)
+                resize(msgdata, hdr.size)
+                (baddr, blen) = msg.buf()
+                l2 = libc.recv(socket, baddr + hdr.size - l, blen - l, 0)
+                if l2 > 0:
+                    l += l2
+                else:
+                    raise IOError ("Unable to read the %d remaining bytes" % blen - l)
+        else:
+            raise IOError ("Unable to read the message")
 
-        return (l,msg)
+        return msg.cdr()
 
-    def send(self, msg, size=0):
+    def send(self, msg):
         """
         """
-        l = libc.send(self.fd, byref(msg), size, 0)
+        (baddr, blen) = msg.buf()
+        l = libc.send(self.fd, baddr, blen, 0)
         return l
 
