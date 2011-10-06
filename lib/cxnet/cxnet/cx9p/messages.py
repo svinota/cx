@@ -220,12 +220,10 @@ class Rstat (Structure):
     9P type 125 'stat' reply (return) message class
     Stat, wstat - inquire or change file attributes
     """
-
-    def cdarclass (self):
-        """
-        Returns the type of the message tail ``stat``
-        """
-        return p9msgarray
+    _pack_ = 1
+    _fields_ = [
+        ("stat", p9msgarray),
+    ]
 
 
 class Tclunk (Structure):
@@ -359,12 +357,10 @@ class Rerror (Structure):
     9P type 107 'error' reply (return) message class
     Error - return an error
     """
-
-    def cdarclass (self):
-        """
-        Returns the type of the message tail ``ename``
-        """
-        return p9msgstring
+    _pack_ = 1
+    _fields_ = [
+        ("ename", p9msgstring),
+    ]
 
 
 class Twalk (Structure):
@@ -379,11 +375,14 @@ class Twalk (Structure):
         ("nwname", c_uint16),
     ]
 
-    def cdarclass (self):
+    def cdarclass (self, index = 0):
         """
-        Returns the type of the message tail ``wname``
+        Returns the type of the message tail number ``index``:
+          * wname ```p9msgstring``` * nwname.
         """
-        return p9msgstring
+        if index < nwname:
+            return p9msgstring
+        raise IndexError("Array index out of bounds")
 
 class Rwalk (Structure):
     """
@@ -393,8 +392,16 @@ class Rwalk (Structure):
     _pack_ = 1
     _fields_ = [
         ("nwqid", c_uint16),
-        ("qid", (p9qid * nwqid)),
     ]
+
+    def cdarclass (self, index = 0):
+        """
+        Returns the type of the message tail number ``index``:
+          * qid ```p9qid``` * nwqid.
+        """
+        if index < nwqid:
+            return p9qid
+        raise IndexError("Array index out of bounds")
 
 
 class Tattach (Structure):
