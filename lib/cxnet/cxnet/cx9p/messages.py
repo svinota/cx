@@ -36,6 +36,10 @@ from ctypes import LittleEndianStructure as Structure
 MAX_MSG_SIZE = 8192
 __all__ = ["MAX_MSG_SIZE"]
 
+# Normal (default) message size: 4096 bytes -- one memory page.
+NORM_MSG_SIZE = 4096
+__all__ += ["NORM_MSG_SIZE"]
+
 class p9msg (Structure):
     """
     A 9P message head.
