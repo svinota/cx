@@ -120,6 +120,7 @@ __all__ += ["p9qid"]
 # 9P manual pages and C header files.
 # See the `templates' branch for details.
 
+
 # The 9P version implemented
 VERSION9P = "9P2000"
 
@@ -524,4 +525,4 @@ p9msgclasses += tuple([None]*128) # Types for 128..255 are not defined
 # Export some constants
 __all__ += ["VERSION9P"]
 # Export all defined message types
-__all__ += export_by_prefix("T",globals()) + export_by_prefix("R",globals())
+__all__ += ["Tversion", "Rversion", "Tauth", "Rauth", "Tattach", "Rattach", "Terror", "Rerror", "Tflush", "Rflush", "Twalk", "Rwalk", "Topen", "Ropen", "Tcreate", "Rcreate", "Tread", "Rread", "Twrite", "Rwrite", "Tclunk", "Rclunk", "Tremove", "Rremove", "Tstat", "Rstat", "Twstat", "Rwstat"]
