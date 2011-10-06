@@ -114,6 +114,12 @@ class p9qid (Structure):
 
 __all__ += ["p9qid"]
 
+
+# Do not edit the following.
+# The following code is generated automatically from the
+# 9P manual pages and C header files.
+# See the `templates' branch for details.
+
 # The 9P version implemented
 VERSION9P = "9P2000"
 
