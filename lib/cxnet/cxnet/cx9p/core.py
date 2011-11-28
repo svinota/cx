@@ -37,6 +37,78 @@ from socket import htons, htonl, ntohs, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REU
 from messages import *
 from mempair import *
 
+# Modules for asynchronous queue processing
+import threading
+import Queue
+
+# Limit the size of the message queue
+MAXWAITING = 1024
+
+# The number of threads per queue
+QTHREADS = 2
+
+def basereply (tmsg, extrasize = 0):
+    """
+    Returns the base mempair structure of the reply message for
+    a given T-message mempair object
+    """
+    replytype = tmsg.car().type + 1
+    replyclass = p9msgclasses[replytype]
+    replysize = sizeof(p9msg) + sizeof(replyclass) + extrasize
+    replymsg = mempair(p9msg, (c_ubyte * replysize))
+    replymsg.car().size = replysize
+    replymsg.car().type = replytype
+    replymsg.car().tag = tmsg.car().tag
+    return replymsg
+
+def errorreply (tmsg, emsg):
+    """
+    Returns the Rerror message mempair object with a given
+    error message for a given T-message
+    """
+    replytype = 107
+    replysize = sizeof(p9msg) + sizeof(Rerror) + sizeof(p9msgstring) + sizeof(emsg.raw)
+    replymsg = mempair(p9msg, (c_ubyte * replysize))
+    replymsg.car().size = replysize
+    replymsg.car().type = replytype
+    replymsg.car().tag = tmsg.car().tag
+    replymsg.cdr().car().len = sizeof(emsg.raw)
+    replymsg.cdr().cdr().cdr().raw = emsg.raw
+    return replymsg
+
+
+class p9socketworker(threading.Thread):
+    """
+    Processes the T-message queue running a thread
+    """
+    def __init__ (self, sock):
+        self.__sock = sock
+        threading.Thread.__init__(self)
+
+    def run (self):
+        while True:
+            msg = sock.nextmsg()
+            if msg is None:
+                break # reached the end of the queue
+            
+            if isinstance(msg.cdr().car(), Tversion):
+                sock.debug ("Requested 9P version: %s, maximum size: %i bytes" % msg.cdr().cdr().cdr().car().raw, msg.cdr().car().msize)
+                (rver, rmsize) = getversion(msg.cdr().cdr().cdr().car().raw,
+                                            msg.cdr().car().msize)
+                rmsg = basereply(msg, sizeof(p9msgstring) + sizeof(rver.raw))
+                rmsg.cdr().car().msize = rmsize;
+                rmsg.cdr().cdr().car().len = sizeof(rver.raw)
+                rmsg.cdr().cdr().cdr().car().raw = rver.raw
+                sock.debug ("Supported 9P version: %s, maximum size: %i bytes" % rmsg.cdr().cdr().cdr().car().raw, rmsg.cdr().car().msize)
+            else:
+                sock.debug ("An unknown case! Message type: %i" % msg.car().type)
+                emsg = "Currently the message %s is not supported. Sorry!" % msg.cdr().car().__class__.__name__
+                rmsg = errorreply(msg, emsg)
+                sock.debug (emsg)
+
+            sock.reply(rmsg)
+
+
 __all__ = [ "p9socket" ]
 
 class sockaddr_in (Structure):
@@ -53,6 +125,12 @@ class p9socket (object):
     9P core
     """
     fd = None    # socket file descriptor
+
+    # The message queue
+    msgq = Queue.Queue(MAXWAITING)
+
+    # The set of aborted (flushed) tags
+    flushed = {}
 
     def __init__(self, address='0.0.0.0',port=10001):
         """
@@ -73,10 +151,16 @@ class p9socket (object):
             self.close()
             raise Exception("libc.bind(): errcode %i" % (l))
 
+        for i in range(QTHREADS):
+            p9socketworker(self).start()
+
     def close(self):
         """
         Close the socket
         """
+        for i in range(QTHREADS):
+            self.msgq.put(None)
+        self.msgq.join()
         libc.close(self.fd)
 
     def dial(self,target):
@@ -94,12 +178,13 @@ class p9socket (object):
             sa = sockaddr_in()
             s = libc.accept(self.fd, byref(sa), byref(c_uint32(sizeof(sa))))
             msg = self.recv(s)
-            if isinstance(msg.car(), Tversion):
-                print ("Requested 9P version: %s" % msg.cdr().cdr().car().raw)
+            if isinstance(msg.cdr().car(), Tflush):
+                flushed[msg.car().oldtag] = True
+                rmsg = basereply(msg)
+                send(rmsg)
             else:
-                print("got message of",l,"bytes")
+                msgq.put(msg)
             libc.close(s)
-
 
     def recv(self,socket):
         """
@@ -123,7 +208,7 @@ class p9socket (object):
         else:
             raise IOError ("Unable to read the message")
 
-        return msg.cdr()
+        return msg
 
     def send(self, msg):
         """
@@ -132,3 +217,33 @@ class p9socket (object):
         l = libc.send(self.fd, baddr, blen, 0)
         return l
 
+    def debug (self, dmsg):
+        """
+        Outputs the given debug message if in debug mode
+        """
+        if self.__debug:
+            print (dmsg)
+
+    def nextmsg (self):
+        """
+        Returns the next message from the queue
+        """
+        msg = None
+        next = True
+        while next:
+            next = False
+            self.lock.acquire()
+            msg = self.msgq.get()
+            if msg is not None and msg.car().tag in self.flushed:
+                del self.flushed[msg.car().tag]
+                next = True
+            self.lock.release()
+        return msg
+
+    def reply (rmsg):
+        """
+        Send the given reply message and call task_done on the
+        message queue
+        """
+        self.send(rmsg)
+        self.msgq.task_done()
