@@ -235,12 +235,15 @@ class p9socket (object):
 
         return msg
 
-    def send(self, msg):
+    def send(self, socket, msg):
         """
+        Send the given reply message to the client over
+        the given socket
         """
         (baddr, blen) = msg.buf()
-        l = libc.send(self.fd, baddr, blen, 0)
-        return l
+        l = libc.send(socket, baddr, blen, 0)
+        if l < blen:
+            raise IOError ("Unable to send the message")
 
     def debug (self, dmsg):
         """
@@ -264,12 +267,12 @@ class p9socket (object):
                 next = (session.closed or session.clearflushed(msg))
         return (session, msg)
 
-    def reply (self, rmsg, task_done = True):
+    def reply (self, socket, rmsg, task_done = True):
         """
-        Send the given reply message and call task_done on the
+        Send the given reply message and call ``task_done`` on the
         message queue
         """
-        self.send(rmsg)
+        self.send(socket, rmsg)
         if task_done:
             self.__msgq.task_done()
 
@@ -372,7 +375,7 @@ class p9session (threading.Thread):
         ValueError is raised
         """
         if rmsg.car().size <= self.msize:
-            self.__sock.reply (rmsg, task_done)
+            self.__sock.reply (self.__clsock, rmsg, task_done)
         else:
             emsg = errorreply (rmsg, "The reply message is too long")
             extra = emsg.car().size - self.msize
@@ -381,5 +384,5 @@ class p9session (threading.Thread):
             if extra > 0:
                 emsg.cdr().car().len -= extra
                 emsg.car().size -= extra
-            self.__sock.reply (emsg, task_done)
+            self.__sock.reply (self.__clsock, emsg, task_done)
             raise ValueError ("The message is too long")
