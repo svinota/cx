@@ -241,6 +241,7 @@ class p9socket (object):
         the given socket
         """
         (baddr, blen) = msg.buf()
+        msg.car().size = blen
         l = libc.send(socket, baddr, blen, 0)
         if l < blen:
             raise IOError ("Unable to send the message")
