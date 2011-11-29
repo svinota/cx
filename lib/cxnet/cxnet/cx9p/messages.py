@@ -234,10 +234,12 @@ class Rstat (Structure):
     9P type 125 'stat' reply (return) message class
     Stat, wstat - inquire or change file attributes
     """
-    _pack_ = 1
-    _fields_ = [
-        ("stat", p9msgarray),
-    ]
+
+    def cdarclass (self):
+        """
+        Returns the type of the message tail ``stat``
+        """
+        return p9msgarray
 
 
 class Tclunk (Structure):
@@ -371,10 +373,12 @@ class Rerror (Structure):
     9P type 107 'error' reply (return) message class
     Error - return an error
     """
-    _pack_ = 1
-    _fields_ = [
-        ("ename", p9msgstring),
-    ]
+
+    def cdarclass (self):
+        """
+        Returns the type of the message tail ``ename``
+        """
+        return p9msgstring
 
 
 class Twalk (Structure):
