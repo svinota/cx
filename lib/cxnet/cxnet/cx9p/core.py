@@ -92,30 +92,39 @@ class p9socketworker(threading.Thread):
         send equal or less than the size given in ``msize``
         """
 
-        return (VERSION9P, MAX_MSG_SIZE)
+        if msize <= MAX_MSG_SIZE:
+            rmsize = msize
+        else:
+            rmsize = MAX_MSG_SIZE
+        return (VERSION9P, rmsize)
 
     def run (self):
         while True:
-            msg = self.__sock.nextmsg()
+            (session, msg) = self.__sock.nextmsg()
             if msg is None:
+                self.__sock.debug ("Worker finished")
                 break # reached the end of the queue
+
+            if self.__sock.closed:
+                self.__sock.reply (errorreply (msg, "The server is closed"))
             
             if isinstance(msg.cdr().car(), Tversion):
-                self.__sock.debug ("Requested 9P version: %s, maximum size: %i bytes" % (msg.cdr().cdr().cdr().car().raw, msg.cdr().car().msize))
+                session.debug ("Requested 9P version: %s, maximum size: %i bytes" % (msg.cdr().cdr().cdr().car().raw, msg.cdr().car().msize))
                 (rver, rmsize) = self.getversion(msg.cdr().cdr().cdr().car().raw,
                                                  msg.cdr().car().msize)
+                session.msize = rmsize
                 rmsg = basereply(msg)
                 rmsg.cdr().car().msize = rmsize;
                 rmsg.cdr().cdr().car().len = len(rver)
                 rmsg.cdr().cdr().cdr().car().raw = rver
-                self.__sock.debug ("Supported 9P version: %s, maximum size: %i bytes" % (rmsg.cdr().cdr().cdr().car().raw, rmsg.cdr().car().msize))
+                session.debug ("Supported 9P version: %s, maximum size: %i bytes" % (rmsg.cdr().cdr().cdr().car().raw, rmsg.cdr().car().msize))
             else:
-                self.__sock.debug ("An unknown case! Message type: %i" % msg.car().type)
+                session.debug ("An unknown case! Message type: %i" % msg.car().type)
                 emsg = "Currently the message %s is not supported. Sorry!" % msg.cdr().car().__class__.__name__
                 rmsg = errorreply(msg, emsg)
-                self.__sock.debug (emsg)
+                session.debug (emsg)
 
-            self.__sock.reply(rmsg)
+            session.reply(rmsg)
 
 
 __all__ = [ "p9socket" ]
@@ -136,13 +145,11 @@ class p9socket (object):
     fd = None    # socket file descriptor
 
     # The message queue
-    msgq = Queue.Queue(MAXWAITING)
-    lock = threading.Lock()
-
-    # The set of aborted (flushed) tags
-    flushed = {}
+    __msgq = Queue.Queue(MAXWAITING)
 
     __debug = True
+
+    closed = True
 
     def __init__(self, address='0.0.0.0',port=10001):
         """
@@ -171,9 +178,11 @@ class p9socket (object):
         Close the socket
         """
         for i in range(QTHREADS):
-            self.msgq.put(None)
-        self.msgq.join()
+            self.enqueue (None, None)
+        self.debug ("Waiting for queue workers to finish...")
+        self.__msgq.join()
         libc.close(self.fd)
+        self.closed = True
 
     def dial(self,target):
         """
@@ -181,26 +190,26 @@ class p9socket (object):
         """
         pass
 
+    def enqueue (self, session, msg):
+        """
+        Enqueue the given reply message for later processing
+        """
+        self.__msgq.put((session, msg))
+
     def serve(self):
         """
         9p server
         """
         libc.listen(self.fd,10)
+        self.closed = False
         while True:
             sa = sockaddr_in()
             try:
                 s = libc.accept(self.fd, byref(sa), byref(c_uint32(sizeof(sa))))
-                msg = self.recv(s)
+                p9session(self, s).start()
             except:
                 self.close()
                 raise
-            if isinstance(msg.cdr().car(), Tflush):
-                self.flushed[msg.car().oldtag] = True
-                rmsg = basereply(msg)
-                self.send(rmsg)
-            else:
-                self.msgq.put(msg)
-            libc.close(s)
 
     def recv(self,socket):
         """
@@ -245,21 +254,132 @@ class p9socket (object):
         Returns the next message from the queue
         """
         msg = None
-        self.lock.acquire()
         next = True
         while next:
             next = False
-            msg = self.msgq.get()
-            if msg is not None and msg.car().tag in self.flushed:
-                del self.flushed[msg.car().tag]
-                next = True
-        self.lock.release()
-        return msg
+            (session, msg) = self.__msgq.get()
+            if msg is None:
+                self.__msgq.task_done()
+            else:
+                next = (session.closed or session.clearflushed(msg))
+        return (session, msg)
 
-    def reply (self, rmsg):
+    def reply (self, rmsg, task_done = True):
         """
         Send the given reply message and call task_done on the
         message queue
         """
         self.send(rmsg)
-        self.msgq.task_done()
+        if task_done:
+            self.__msgq.task_done()
+
+
+class p9session (threading.Thread):
+    """
+    Client-server connection via 9P
+    """
+    def __init__(self, p9sock, clsock, p9msize = MAX_MSG_SIZE):
+        """
+        Initializes the session object bound to the specified
+        9P socket instance
+        """
+        self.__sock = p9sock
+        self.__clsock = clsock
+        self.msize = p9msize
+        self.__lock = threading.Lock()
+        self.__flushed = {}
+        self.closed = False
+        threading.Thread.__init__(self)
+
+    def markflushed (self, oldtag):
+        """
+        Mark the given tag as flushed (aborted)
+        """
+        self.__lock.acquire()
+        self.__flushed[oldtag] = True
+        self.__lock.release()
+
+    def isflushed (self, msg):
+        """
+        Indicates if the given message is flushed (aborted)
+        """        
+        return msg.car().tag in self.__flushed
+
+    def clearflushed (self, arg):
+        """
+        Unmark the given message or tag from the set of
+        flushed (aborted) messages/tags
+        """
+        if isinstance (arg, mempair):
+            tag = arg.car().tag
+        else:
+            tag = arg
+        self.__lock.acquire()
+        if tag in self.__flushed:
+            del self.__flushed[tag]
+            ret = True
+        else:
+            ret = False
+        self.__lock.release()
+        return ret
+
+    def run (self):
+        """
+        Receive and transmit messages
+        """
+        self.debug ("Start a new session")
+        try:
+            while not self.__sock.closed:
+                try:
+                    msg = self.__sock.recv(self.__clsock)
+                except IOError:
+                    break
+                if isinstance(msg.cdr().car(), Tflush):
+                    self.markflushed (msg.cdr().car().oldtag)
+                    self.reply (basereply(msg), False)
+                else:
+                    self.__sock.enqueue (self, msg)
+            libc.close(self.__clsock)
+            self.closed = True
+            self.debug ("The session is closed")
+        except:
+            libc.close(self.__clsock)
+            self.closed = True
+            self.debug ("The session is closed on an error")
+            raise
+
+    def nextmsg (self):
+        """
+        A proxy method to the parent socket ``nextmsg`` proc
+        """
+        return self.__sock.nextmsg()
+
+    def debug (self, dmsg):
+        """
+        A proxy method to the parent socket ``debug`` proc
+        """
+        self.__sock.debug("[session] " + dmsg)
+
+    def reply (self, rmsg, task_done = True):
+        """
+        A proxy method to the parent socket ``reply`` proc.
+        The size of the given message is checked not to exceed
+        the maximum message size, configured for this instance.
+        According to the 9P spec, the maximum message size is
+        specified by the client with the T-version request.
+        If the message is longer than the client is ready to
+        handle, then the Rerror message is sent and a
+        ValueError is raised
+        """
+        if rmsg.car().size <= self.msize:
+            self.__sock.reply (rmsg, task_done)
+        else:
+            emsg = errorreply (rmsg, "The reply message is too long")
+            extra = emsg.car().size - self.msize
+            if extra > emsg.cdr().car().len:
+                extra = emsg.cdr().car().len
+            if extra > 0:
+                emsg.cdr().car().len -= extra
+                emsg.car().size -= extra
+            self.__sock.reply (emsg, task_done)
+            raise ValueError ("The message is too long")
