@@ -210,42 +210,6 @@ class p9socket (object):
                 self.close()
                 raise
 
-    def recv(self,socket):
-        """
-        """
-        msgdata = (c_ubyte * NORM_MSG_SIZE)()
-        msg = mempair(p9msg, msgdata)
-        (baddr, blen) = msg.databuf()
-        l = libc.recv(socket, baddr, blen, 0)
-        hdr = msg.car()
-        if l > sizeof(hdr):
-            if hdr.size > l:
-                if hdr.size > MAX_MSG_SIZE:
-                    raise IOError ("The message is too large: %d bytes" % hdr.size)
-                resize(msgdata, hdr.size)
-                (baddr, blen) = msg.databuf()
-                l2 = libc.recv(socket, baddr + hdr.size - l, blen - l, 0)
-                if l2 > 0:
-                    l += l2
-                else:
-                    raise IOError ("Unable to read the %d remaining bytes" % blen - l)
-        else:
-            raise IOError ("Unable to read the message")
-
-        return (l, msg)
-
-    def send(self, socket, msg):
-        """
-        Send the given reply message to the client over
-        the given socket
-        """
-        (baddr, blen) = msg.buf()
-        msg.car().size = blen
-        l = libc.send(socket, baddr, blen, 0)
-        if l < blen:
-            raise IOError ("Unable to send the message")
-        return l
-
     def debug (self, dmsg):
         """
         Outputs the given debug message if in debug mode
@@ -268,15 +232,12 @@ class p9socket (object):
                 next = (session.closed or session.clearflushed(msg))
         return (session, msg)
 
-    def reply (self, socket, rmsg, task_done = True):
+    def msgdone (self):
         """
-        Send the given reply message and call ``task_done`` on the
-        message queue
+        Tels the server that a message taken from the queue
+        is successfully processed
         """
-        l = self.send(socket, rmsg)
-        if task_done:
-            self.__msgq.task_done()
-        return l
+        self.__msgq.task_done()
 
 
 class p9session (threading.Thread):
@@ -336,7 +297,7 @@ class p9session (threading.Thread):
         try:
             while not self.__sock.closed:
                 try:
-                    (l, msg) = self.__sock.recv(self.__clsock)
+                    (l, msg) = self.recv()
                     self.debug ("%i bytes received" % l)
                 except IOError:
                     break
@@ -367,21 +328,46 @@ class p9session (threading.Thread):
         """
         self.__sock.debug("[session] " + dmsg)
 
+    def recv(self):
+        """
+        Receive a request message from the client
+        """
+        msgdata = (c_ubyte * NORM_MSG_SIZE)()
+        msg = mempair(p9msg, msgdata)
+        (baddr, blen) = msg.databuf()
+        l = libc.recv(self.__clsock, baddr, blen, 0)
+        hdr = msg.car()
+        if l > sizeof(hdr):
+            if hdr.size > l:
+                if hdr.size > MAX_MSG_SIZE:
+                    raise IOError ("The message is too large: %d bytes" % hdr.size)
+                resize(msgdata, hdr.size)
+                (baddr, blen) = msg.databuf()
+                l2 = libc.recv(self.__clsock, baddr + hdr.size - l, blen - l, 0)
+                if l2 > 0:
+                    l += l2
+                else:
+                    raise IOError ("Unable to read the %d remaining bytes" % blen - l)
+        else:
+            raise IOError ("Unable to read the message")
+
+        return (l, msg)
+
     def reply (self, rmsg, task_done = True):
         """
-        A proxy method to the parent socket ``reply`` proc.
-        The size of the given message is checked not to exceed
-        the maximum message size, configured for this instance.
+        Send the given reply message to the client.
+        The size of the message is checked not to exceed the
+        maximum message size, configured for this session.
         According to the 9P spec, the maximum message size is
         specified by the client with the T-version request.
-        If the message is longer than the client is ready to
-        handle, then the Rerror message is sent and a
+        If the message is longer than a message client is ready
+        to handle, then the Rerror message is sent and a
         ValueError is raised
         """
-        if rmsg.car().size <= self.msize:
-            l = self.__sock.reply (self.__clsock, rmsg, task_done)
-            self.debug ("%i bytes sent" % l)
-        else:
+        (baddr, blen) = rmsg.buf()
+        rmsg.car().size = blen
+        emsg = None
+        if rmsg.car().size > self.msize:
             emsg = errorreply (rmsg, "The reply message is too long")
             extra = emsg.car().size - self.msize
             if extra > emsg.cdr().car().len:
@@ -389,6 +375,12 @@ class p9session (threading.Thread):
             if extra > 0:
                 emsg.cdr().car().len -= extra
                 emsg.car().size -= extra
-            l = self.__sock.reply (self.__clsock, emsg, task_done)
-            self.debug ("%i bytes sent" % l)
+            (baddr, blen) = emsg.buf()
+        l = libc.send(self.__clsock, baddr, blen, 0)
+        self.debug ("%i bytes sent" % l)
+        if l < blen:
+            raise IOError ("Unable to send the message")
+        if task_done:
+            self.__sock.msgdone()
+        if emsg is not None:
             raise ValueError ("The message is too long")
