@@ -69,9 +69,8 @@ def errorreply (tmsg, emsg):
     error message for a given T-message
     """
     replymsg = basereply(tmsg, 107)
-    replymsg.car().size += sizeof(p9msgstring) + len(emsg)
-    replymsg.cdr().car().len = len(emsg)
-    replymsg.cdr().cdr().cdr().raw = emsg
+    replymsg.cdr().cdr().car().len = len(emsg)
+    replymsg.cdr().cdr().cdr().car().raw = emsg
     return replymsg
 
 
