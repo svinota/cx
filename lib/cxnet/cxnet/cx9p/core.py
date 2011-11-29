@@ -47,18 +47,20 @@ MAXWAITING = 1024
 # The number of threads per queue
 QTHREADS = 2
 
-def basereply (tmsg, extrasize = 0):
+def basereply (tmsg, rtype = -1):
     """
     Returns the base mempair structure of the reply message for
     a given T-message mempair object
     """
-    replytype = tmsg.car().type + 1
-    replyclass = p9msgclasses[replytype]
-    replysize = sizeof(p9msg) + sizeof(replyclass) + extrasize
-    replymsg = mempair(p9msg, (c_ubyte * replysize))
-    replymsg.car().size = replysize
-    replymsg.car().type = replytype
+    if rtype < 0:
+        rtype = tmsg.car().type + 1
+    msgdata = (c_ubyte * NORM_MSG_SIZE)()
+    replymsg = mempair(p9msg, msgdata)
+    replymsg.car().type = rtype
     replymsg.car().tag = tmsg.car().tag
+    (baddr, bsize) = replymsg.carbuf()
+    replymsg.car().size = bsize
+    
     return replymsg
 
 def errorreply (tmsg, emsg):
@@ -66,14 +68,10 @@ def errorreply (tmsg, emsg):
     Returns the Rerror message mempair object with a given
     error message for a given T-message
     """
-    replytype = 107
-    replysize = sizeof(p9msg) + sizeof(Rerror) + sizeof(p9msgstring) + sizeof(emsg.raw)
-    replymsg = mempair(p9msg, (c_ubyte * replysize))
-    replymsg.car().size = replysize
-    replymsg.car().type = replytype
-    replymsg.car().tag = tmsg.car().tag
-    replymsg.cdr().car().len = sizeof(emsg.raw)
-    replymsg.cdr().cdr().cdr().raw = emsg.raw
+    replymsg = basereply(tmsg, 107)
+    replymsg.car().size += sizeof(p9msgstring) + len(emsg)
+    replymsg.cdr().car().len = len(emsg)
+    replymsg.cdr().cdr().cdr().raw = emsg
     return replymsg
 
 
@@ -85,28 +83,39 @@ class p9socketworker(threading.Thread):
         self.__sock = sock
         threading.Thread.__init__(self)
 
+    def getversion (self, verstr, msize):
+        """
+        Returns a tuple (sverstr, smsize), where ``sverstr`` is the
+        9P version that is supported by this server equal or less than
+        the version given in ``verstr`` parameter and ``smsize`` is the
+        maximum message length that this server is ready to receive or
+        send equal or less than the size given in ``msize``
+        """
+
+        return (VERSION9P, MAX_MSG_SIZE)
+
     def run (self):
         while True:
-            msg = sock.nextmsg()
+            msg = self.__sock.nextmsg()
             if msg is None:
                 break # reached the end of the queue
             
             if isinstance(msg.cdr().car(), Tversion):
-                sock.debug ("Requested 9P version: %s, maximum size: %i bytes" % msg.cdr().cdr().cdr().car().raw, msg.cdr().car().msize)
-                (rver, rmsize) = getversion(msg.cdr().cdr().cdr().car().raw,
-                                            msg.cdr().car().msize)
-                rmsg = basereply(msg, sizeof(p9msgstring) + sizeof(rver.raw))
+                self.__sock.debug ("Requested 9P version: %s, maximum size: %i bytes" % (msg.cdr().cdr().cdr().car().raw, msg.cdr().car().msize))
+                (rver, rmsize) = self.getversion(msg.cdr().cdr().cdr().car().raw,
+                                                 msg.cdr().car().msize)
+                rmsg = basereply(msg)
                 rmsg.cdr().car().msize = rmsize;
-                rmsg.cdr().cdr().car().len = sizeof(rver.raw)
-                rmsg.cdr().cdr().cdr().car().raw = rver.raw
-                sock.debug ("Supported 9P version: %s, maximum size: %i bytes" % rmsg.cdr().cdr().cdr().car().raw, rmsg.cdr().car().msize)
+                rmsg.cdr().cdr().car().len = len(rver)
+                rmsg.cdr().cdr().cdr().car().raw = rver
+                self.__sock.debug ("Supported 9P version: %s, maximum size: %i bytes" % (rmsg.cdr().cdr().cdr().car().raw, rmsg.cdr().car().msize))
             else:
-                sock.debug ("An unknown case! Message type: %i" % msg.car().type)
+                self.__sock.debug ("An unknown case! Message type: %i" % msg.car().type)
                 emsg = "Currently the message %s is not supported. Sorry!" % msg.cdr().car().__class__.__name__
                 rmsg = errorreply(msg, emsg)
-                sock.debug (emsg)
+                self.__sock.debug (emsg)
 
-            sock.reply(rmsg)
+            self.__sock.reply(rmsg)
 
 
 __all__ = [ "p9socket" ]
@@ -128,9 +137,12 @@ class p9socket (object):
 
     # The message queue
     msgq = Queue.Queue(MAXWAITING)
+    lock = threading.Lock()
 
     # The set of aborted (flushed) tags
     flushed = {}
+
+    __debug = True
 
     def __init__(self, address='0.0.0.0',port=10001):
         """
@@ -176,14 +188,18 @@ class p9socket (object):
         libc.listen(self.fd,10)
         while True:
             sa = sockaddr_in()
-            s = libc.accept(self.fd, byref(sa), byref(c_uint32(sizeof(sa))))
-            msg = self.recv(s)
+            try:
+                s = libc.accept(self.fd, byref(sa), byref(c_uint32(sizeof(sa))))
+                msg = self.recv(s)
+            except:
+                self.close()
+                raise
             if isinstance(msg.cdr().car(), Tflush):
-                flushed[msg.car().oldtag] = True
+                self.flushed[msg.car().oldtag] = True
                 rmsg = basereply(msg)
-                send(rmsg)
+                self.send(rmsg)
             else:
-                msgq.put(msg)
+                self.msgq.put(msg)
             libc.close(s)
 
     def recv(self,socket):
@@ -229,18 +245,18 @@ class p9socket (object):
         Returns the next message from the queue
         """
         msg = None
+        self.lock.acquire()
         next = True
         while next:
             next = False
-            self.lock.acquire()
             msg = self.msgq.get()
             if msg is not None and msg.car().tag in self.flushed:
                 del self.flushed[msg.car().tag]
                 next = True
-            self.lock.release()
+        self.lock.release()
         return msg
 
-    def reply (rmsg):
+    def reply (self, rmsg):
         """
         Send the given reply message and call task_done on the
         message queue
