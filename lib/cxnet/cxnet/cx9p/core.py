@@ -216,7 +216,7 @@ class p9socket (object):
         """
         msgdata = (c_ubyte * NORM_MSG_SIZE)()
         msg = mempair(p9msg, msgdata)
-        (baddr, blen) = msg.buf()
+        (baddr, blen) = msg.databuf()
         l = libc.recv(socket, baddr, blen, 0)
         hdr = msg.car()
         if l > sizeof(hdr):
@@ -224,7 +224,7 @@ class p9socket (object):
                 if hdr.size > MAX_MSG_SIZE:
                     raise IOError ("The message is too large: %d bytes" % hdr.size)
                 resize(msgdata, hdr.size)
-                (baddr, blen) = msg.buf()
+                (baddr, blen) = msg.databuf()
                 l2 = libc.recv(socket, baddr + hdr.size - l, blen - l, 0)
                 if l2 > 0:
                     l += l2
@@ -233,7 +233,7 @@ class p9socket (object):
         else:
             raise IOError ("Unable to read the message")
 
-        return msg
+        return (l, msg)
 
     def send(self, socket, msg):
         """
@@ -244,6 +244,7 @@ class p9socket (object):
         l = libc.send(socket, baddr, blen, 0)
         if l < blen:
             raise IOError ("Unable to send the message")
+        return l
 
     def debug (self, dmsg):
         """
@@ -272,9 +273,10 @@ class p9socket (object):
         Send the given reply message and call ``task_done`` on the
         message queue
         """
-        self.send(socket, rmsg)
+        l = self.send(socket, rmsg)
         if task_done:
             self.__msgq.task_done()
+        return l
 
 
 class p9session (threading.Thread):
@@ -334,11 +336,13 @@ class p9session (threading.Thread):
         try:
             while not self.__sock.closed:
                 try:
-                    msg = self.__sock.recv(self.__clsock)
+                    (l, msg) = self.__sock.recv(self.__clsock)
+                    self.debug ("%i bytes received" % l)
                 except IOError:
                     break
                 if isinstance(msg.cdr().car(), Tflush):
                     self.markflushed (msg.cdr().car().oldtag)
+                    self.debug ("Flush the %i tag" % msg.cdr().car().oldtag)
                     self.reply (basereply(msg), False)
                 else:
                     self.__sock.enqueue (self, msg)
@@ -375,7 +379,8 @@ class p9session (threading.Thread):
         ValueError is raised
         """
         if rmsg.car().size <= self.msize:
-            self.__sock.reply (self.__clsock, rmsg, task_done)
+            l = self.__sock.reply (self.__clsock, rmsg, task_done)
+            self.debug ("%i bytes sent" % l)
         else:
             emsg = errorreply (rmsg, "The reply message is too long")
             extra = emsg.car().size - self.msize
@@ -384,5 +389,6 @@ class p9session (threading.Thread):
             if extra > 0:
                 emsg.cdr().car().len -= extra
                 emsg.car().size -= extra
-            self.__sock.reply (self.__clsock, emsg, task_done)
+            l = self.__sock.reply (self.__clsock, emsg, task_done)
+            self.debug ("%i bytes sent" % l)
             raise ValueError ("The message is too long")
