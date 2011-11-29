@@ -198,7 +198,7 @@ class Tversion (Structure):
 
     def cdarclass (self):
         """
-        Returns the type of the message tail ``version``
+        Returns the ``p9msgstring`` as the type of the message tail ``version``
         """
         return p9msgstring
 
@@ -214,7 +214,7 @@ class Rversion (Structure):
 
     def cdarclass (self):
         """
-        Returns the type of the message tail ``version``
+        Returns the ``p9msgstring`` as the type of the message tail ``version``
         """
         return p9msgstring
 
@@ -237,7 +237,7 @@ class Rstat (Structure):
 
     def cdarclass (self):
         """
-        Returns the type of the message tail ``stat``
+        Returns the ``p9msgarray`` as the type of the message tail ``stat``
         """
         return p9msgarray
 
@@ -356,7 +356,7 @@ class Rread (Structure):
 
     def cdarclass (self):
         """
-        Returns the type of the message tail ``data``
+        Returns the ``(c_ubyte * count)`` as the type of the message tail ``data``
         """
         return (c_ubyte * count)
 
@@ -376,7 +376,7 @@ class Rerror (Structure):
 
     def cdarclass (self):
         """
-        Returns the type of the message tail ``ename``
+        Returns the ``p9msgstring`` as the type of the message tail ``ename``
         """
         return p9msgstring
 
@@ -468,7 +468,7 @@ class Twstat (Structure):
 
     def cdarclass (self):
         """
-        Returns the type of the message tail ``stat``
+        Returns the ``p9msgarray`` as the type of the message tail ``stat``
         """
         return p9msgarray
 
@@ -493,7 +493,7 @@ class Twrite (Structure):
 
     def cdarclass (self):
         """
-        Returns the type of the message tail ``data``
+        Returns the ``(c_ubyte * count)`` as the type of the message tail ``data``
         """
         return (c_ubyte * count)
 
