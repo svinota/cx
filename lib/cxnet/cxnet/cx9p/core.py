@@ -49,17 +49,17 @@ QTHREADS = 2
 
 def basereply (tmsg, rtype = -1):
     """
-    Returns the base mempair structure of the reply message for
+    Returns the corresponding R-message mempair object for
     a given T-message mempair object
     """
     if rtype < 0:
-        rtype = tmsg.car().type + 1
+        rtype = tmsg.type + 1
     msgdata = (c_ubyte * NORM_MSG_SIZE)()
     replymsg = mempair(p9msg, msgdata)
-    replymsg.car().type = rtype
-    replymsg.car().tag = tmsg.car().tag
+    replymsg.type = rtype
+    replymsg.tag = tmsg.tag
     (baddr, bsize) = replymsg.carbuf()
-    replymsg.car().size = bsize
+    replymsg.size = bsize
     
     return replymsg
 
