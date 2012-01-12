@@ -130,6 +130,7 @@ class Tcreate (Structure):
     9P type 114 'create' request (transmit) message class
     Open, create - prepare a fid for I/O on an existing or new file
     """
+    _type = 114
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -158,6 +159,7 @@ class Rcreate (Structure):
     9P type 115 'create' reply (return) message class
     Open, create - prepare a fid for I/O on an existing or new file
     """
+    _type = 115
     _pack_ = 1
     _fields_ = [
         ("qid", p9qid),
@@ -170,6 +172,7 @@ class Tremove (Structure):
     9P type 122 'remove' request (transmit) message class
     Remove - remove a file from a server
     """
+    _type = 122
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -180,6 +183,7 @@ class Rremove (Structure):
     9P type 123 'remove' reply (return) message class
     Remove - remove a file from a server
     """
+    _type = 123
 
 
 class Tversion (Structure):
@@ -187,6 +191,7 @@ class Tversion (Structure):
     9P type 100 'version' request (transmit) message class
     Version - negotiate protocol version
     """
+    _type = 100
     _pack_ = 1
     _fields_ = [
         ("msize", c_uint32),
@@ -203,6 +208,7 @@ class Rversion (Structure):
     9P type 101 'version' reply (return) message class
     Version - negotiate protocol version
     """
+    _type = 101
     _pack_ = 1
     _fields_ = [
         ("msize", c_uint32),
@@ -220,6 +226,7 @@ class Tstat (Structure):
     9P type 124 'stat' request (transmit) message class
     Stat, wstat - inquire or change file attributes
     """
+    _type = 124
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -230,6 +237,7 @@ class Rstat (Structure):
     9P type 125 'stat' reply (return) message class
     Stat, wstat - inquire or change file attributes
     """
+    _type = 125
 
     def cdrmap (self):
         """
@@ -243,6 +251,7 @@ class Tclunk (Structure):
     9P type 120 'clunk' request (transmit) message class
     Clunk - forget about a fid
     """
+    _type = 120
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -253,6 +262,7 @@ class Rclunk (Structure):
     9P type 121 'clunk' reply (return) message class
     Clunk - forget about a fid
     """
+    _type = 121
 
 
 class Tauth (Structure):
@@ -260,6 +270,7 @@ class Tauth (Structure):
     9P type 102 'auth' request (transmit) message class
     Attach, auth - messages to establish a connection
     """
+    _type = 102
     _pack_ = 1
     _fields_ = [
         ("afid", c_uint32),
@@ -278,6 +289,7 @@ class Rauth (Structure):
     9P type 103 'auth' reply (return) message class
     Attach, auth - messages to establish a connection
     """
+    _type = 103
     _pack_ = 1
     _fields_ = [
         ("aqid", p9qid),
@@ -289,6 +301,7 @@ class Topen (Structure):
     9P type 112 'open' request (transmit) message class
     Open, create - prepare a fid for I/O on an existing or new file
     """
+    _type = 112
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -300,6 +313,7 @@ class Ropen (Structure):
     9P type 113 'open' reply (return) message class
     Open, create - prepare a fid for I/O on an existing or new file
     """
+    _type = 113
     _pack_ = 1
     _fields_ = [
         ("qid", p9qid),
@@ -312,6 +326,7 @@ class Tflush (Structure):
     9P type 108 'flush' request (transmit) message class
     Flush - abort a message
     """
+    _type = 108
     _pack_ = 1
     _fields_ = [
         ("oldtag", c_uint16),
@@ -322,6 +337,7 @@ class Rflush (Structure):
     9P type 109 'flush' reply (return) message class
     Flush - abort a message
     """
+    _type = 109
 
 
 class Tread (Structure):
@@ -329,6 +345,7 @@ class Tread (Structure):
     9P type 116 'read' request (transmit) message class
     Read, write - transfer data from and to a file
     """
+    _type = 116
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -341,6 +358,7 @@ class Rread (Structure):
     9P type 117 'read' reply (return) message class
     Read, write - transfer data from and to a file
     """
+    _type = 117
     _pack_ = 1
     _fields_ = [
         ("count", c_uint32),
@@ -359,12 +377,14 @@ class Terror (Structure):
     Error - return an error
     Comment: illegal 
     """
+    _type = 106
 
 class Rerror (Structure):
     """
     9P type 107 'error' reply (return) message class
     Error - return an error
     """
+    _type = 107
 
     def cdrmap (self):
         """
@@ -378,6 +398,7 @@ class Twalk (Structure):
     9P type 110 'walk' request (transmit) message class
     Walk - descend a directory hierarchy
     """
+    _type = 110
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -397,6 +418,7 @@ class Rwalk (Structure):
     9P type 111 'walk' reply (return) message class
     Walk - descend a directory hierarchy
     """
+    _type = 111
     _pack_ = 1
     _fields_ = [
         ("nwqid", c_uint16),
@@ -415,6 +437,7 @@ class Tattach (Structure):
     9P type 104 'attach' request (transmit) message class
     Attach, auth - messages to establish a connection
     """
+    _type = 104
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -434,6 +457,7 @@ class Rattach (Structure):
     9P type 105 'attach' reply (return) message class
     Attach, auth - messages to establish a connection
     """
+    _type = 105
     _pack_ = 1
     _fields_ = [
         ("qid", p9qid),
@@ -445,6 +469,7 @@ class Twstat (Structure):
     9P type 126 'wstat' request (transmit) message class
     Stat, wstat - inquire or change file attributes
     """
+    _type = 126
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -461,6 +486,7 @@ class Rwstat (Structure):
     9P type 127 'wstat' reply (return) message class
     Stat, wstat - inquire or change file attributes
     """
+    _type = 127
 
 
 class Twrite (Structure):
@@ -468,6 +494,7 @@ class Twrite (Structure):
     9P type 118 'write' request (transmit) message class
     Read, write - transfer data from and to a file
     """
+    _type = 118
     _pack_ = 1
     _fields_ = [
         ("fid", c_uint32),
@@ -486,6 +513,7 @@ class Rwrite (Structure):
     9P type 119 'write' reply (return) message class
     Read, write - transfer data from and to a file
     """
+    _type = 119
     _pack_ = 1
     _fields_ = [
         ("count", c_uint32),
