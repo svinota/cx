@@ -69,8 +69,8 @@ def errorreply (tmsg, emsg):
     error message for a given T-message
     """
     replymsg = basereply(tmsg, 107)
-    replymsg.cdr().cdr().car().len = len(emsg)
-    replymsg.cdr().cdr().cdr().car().raw = emsg
+    replymsg.ename.len = len(emsg)
+    replymsg.ename.raw = emsg
     return replymsg
 
 
@@ -107,19 +107,18 @@ class p9socketworker(threading.Thread):
             if self.__sock.closed:
                 self.__sock.reply (errorreply (msg, "The server is closed"))
             
-            if isinstance(msg.cdr().car(), Tversion):
-                session.debug ("Requested 9P version: %s, maximum size: %i bytes" % (msg.cdr().cdr().cdr().car().raw, msg.cdr().car().msize))
-                (rver, rmsize) = self.getversion(msg.cdr().cdr().cdr().car().raw,
-                                                 msg.cdr().car().msize)
+            if msg.type == 100:
+                session.debug ("Requested 9P version: %s, maximum size: %i bytes" % (msg.version.raw, msg.msize))
+                (rver, rmsize) = self.getversion(msg.version.raw, msg.msize)
                 session.msize = rmsize
                 rmsg = basereply(msg)
-                rmsg.cdr().car().msize = rmsize;
-                rmsg.cdr().cdr().car().len = len(rver)
-                rmsg.cdr().cdr().cdr().car().raw = rver
-                session.debug ("Supported 9P version: %s, maximum size: %i bytes" % (rmsg.cdr().cdr().cdr().car().raw, rmsg.cdr().car().msize))
+                rmsg.msize = rmsize;
+                rmsg.version.len = len(rver)
+                rmsg.version.raw = rver
+                session.debug ("Supported 9P version: %s, maximum size: %i bytes" % (rmsg.version.raw, rmsg.msize))
             else:
-                session.debug ("An unknown case! Message type: %i" % msg.car().type)
-                emsg = "Currently the message %s is not supported. Sorry!" % msg.cdr().car().__class__.__name__
+                session.debug ("An unknown case! Message type: %i" % msg.type)
+                emsg = "Currently the message %s is not supported. Sorry!" % p9msgclasses[msg.type].__name__
                 rmsg = errorreply(msg, emsg)
                 session.debug (emsg)
 
@@ -269,7 +268,7 @@ class p9session (threading.Thread):
         """
         Indicates if the given message is flushed (aborted)
         """        
-        return msg.car().tag in self.__flushed
+        return msg.tag in self.__flushed
 
     def clearflushed (self, arg):
         """
@@ -277,7 +276,7 @@ class p9session (threading.Thread):
         flushed (aborted) messages/tags
         """
         if isinstance (arg, mempair):
-            tag = arg.car().tag
+            tag = arg.tag
         else:
             tag = arg
         self.__lock.acquire()
@@ -301,9 +300,9 @@ class p9session (threading.Thread):
                     self.debug ("%i bytes received" % l)
                 except IOError:
                     break
-                if isinstance(msg.cdr().car(), Tflush):
-                    self.markflushed (msg.cdr().car().oldtag)
-                    self.debug ("Flush the %i tag" % msg.cdr().car().oldtag)
+                if msg.type == 108:
+                    self.markflushed (msg.oldtag)
+                    self.debug ("Flush the %i tag" % msg.oldtag)
                     self.reply (basereply(msg), False)
                 else:
                     self.__sock.enqueue (self, msg)
@@ -365,16 +364,16 @@ class p9session (threading.Thread):
         ValueError is raised
         """
         (baddr, blen) = rmsg.buf()
-        rmsg.car().size = blen
+        rmsg.size = blen
         emsg = None
-        if rmsg.car().size > self.msize:
+        if rmsg.size > self.msize:
             emsg = errorreply (rmsg, "The reply message is too long")
-            extra = emsg.car().size - self.msize
-            if extra > emsg.cdr().car().len:
-                extra = emsg.cdr().car().len
+            extra = emsg.size - self.msize
+            if extra > emsg.ename.len:
+                extra = emsg.ename.len
             if extra > 0:
-                emsg.cdr().car().len -= extra
-                emsg.car().size -= extra
+                emsg.ename.len -= extra
+                emsg.size -= extra
             (baddr, blen) = emsg.buf()
         l = libc.send(self.__clsock, baddr, blen, 0)
         self.debug ("%i bytes sent" % l)
