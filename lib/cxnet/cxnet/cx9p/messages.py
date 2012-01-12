@@ -510,6 +510,7 @@ p9msgclasses += tuple([Tstat, Rstat]) # 124, 125
 p9msgclasses += tuple([Twstat, Rwstat]) # 126, 127
 p9msgclasses += tuple([None]*128) # Types for 128..255 are not defined
 
+__all__ += ["p9msgclasses"]
 # Export some constants
 __all__ += ["VERSION9P"]
 # Export all defined message types
