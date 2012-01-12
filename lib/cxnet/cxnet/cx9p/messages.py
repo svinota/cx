@@ -145,17 +145,13 @@ class Tcreate (Structure):
             ("mode", c_ubyte),
         ]
 
-    def cdarclass (self, index = 0):
+    def cdrmap (self):
         """
-        Returns the type of the message tail number ``index``:
+        Returns the map of the message tail:
           * name ```p9msgstring```;
-          * ```self.tail```.
+          * _tail ```self.tail```.
         """
-        if index < 1:
-            return p9msgstring
-        if (index - 1) < 1:
-            return self.tail
-        raise IndexError("Array index out of bounds")
+        return [("name", p9msgstring, 1), ("_tail", self.tail, 1)]
 
 class Rcreate (Structure):
     """
@@ -196,11 +192,11 @@ class Tversion (Structure):
         ("msize", c_uint32),
     ]
 
-    def cdarclass (self):
+    def cdrmap (self):
         """
         Returns the ``p9msgstring`` as the type of the message tail ``version``
         """
-        return p9msgstring
+        return [("version", p9msgstring, 1)]
 
 class Rversion (Structure):
     """
@@ -212,11 +208,11 @@ class Rversion (Structure):
         ("msize", c_uint32),
     ]
 
-    def cdarclass (self):
+    def cdrmap (self):
         """
         Returns the ``p9msgstring`` as the type of the message tail ``version``
         """
-        return p9msgstring
+        return [("version", p9msgstring, 1)]
 
 
 class Tstat (Structure):
@@ -235,11 +231,11 @@ class Rstat (Structure):
     Stat, wstat - inquire or change file attributes
     """
 
-    def cdarclass (self):
+    def cdrmap (self):
         """
         Returns the ``p9msgarray`` as the type of the message tail ``stat``
         """
-        return p9msgarray
+        return [("stat", p9msgarray, 1)]
 
 
 class Tclunk (Structure):
@@ -269,17 +265,13 @@ class Tauth (Structure):
         ("afid", c_uint32),
     ]
 
-    def cdarclass (self, index = 0):
+    def cdrmap (self):
         """
-        Returns the type of the message tail number ``index``:
+        Returns the map of the message tail:
           * uname ```p9msgstring```;
           * aname ```p9msgstring```.
         """
-        if index < 1:
-            return p9msgstring
-        if (index - 1) < 1:
-            return p9msgstring
-        raise IndexError("Array index out of bounds")
+        return [("uname", p9msgstring, 1), ("aname", p9msgstring, 1)]
 
 class Rauth (Structure):
     """
@@ -354,11 +346,11 @@ class Rread (Structure):
         ("count", c_uint32),
     ]
 
-    def cdarclass (self):
+    def cdrmap (self):
         """
         Returns the ``(c_ubyte * count)`` as the type of the message tail ``data``
         """
-        return (c_ubyte * count)
+        return [("data", (c_ubyte * count), 1)]
 
 
 class Terror (Structure):
@@ -374,11 +366,11 @@ class Rerror (Structure):
     Error - return an error
     """
 
-    def cdarclass (self):
+    def cdrmap (self):
         """
         Returns the ``p9msgstring`` as the type of the message tail ``ename``
         """
-        return p9msgstring
+        return [("ename", p9msgstring, 1)]
 
 
 class Twalk (Structure):
@@ -393,14 +385,12 @@ class Twalk (Structure):
         ("nwname", c_uint16),
     ]
 
-    def cdarclass (self, index = 0):
+    def cdrmap (self):
         """
-        Returns the type of the message tail number ``index``:
+        Returns the map of the message tail:
           * wname ```p9msgstring``` * nwname.
         """
-        if index < nwname:
-            return p9msgstring
-        raise IndexError("Array index out of bounds")
+        return [("wname", p9msgstring, nwname)]
 
 class Rwalk (Structure):
     """
@@ -412,14 +402,12 @@ class Rwalk (Structure):
         ("nwqid", c_uint16),
     ]
 
-    def cdarclass (self, index = 0):
+    def cdrmap (self):
         """
-        Returns the type of the message tail number ``index``:
+        Returns the map of the message tail:
           * qid ```p9qid``` * nwqid.
         """
-        if index < nwqid:
-            return p9qid
-        raise IndexError("Array index out of bounds")
+        return [("qid", p9qid, nwqid)]
 
 
 class Tattach (Structure):
@@ -433,17 +421,13 @@ class Tattach (Structure):
         ("afid", c_uint32),
     ]
 
-    def cdarclass (self, index = 0):
+    def cdrmap (self):
         """
-        Returns the type of the message tail number ``index``:
+        Returns the map of the message tail:
           * uname ```p9msgstring```;
           * aname ```p9msgstring```.
         """
-        if index < 1:
-            return p9msgstring
-        if (index - 1) < 1:
-            return p9msgstring
-        raise IndexError("Array index out of bounds")
+        return [("uname", p9msgstring, 1), ("aname", p9msgstring, 1)]
 
 class Rattach (Structure):
     """
@@ -466,11 +450,11 @@ class Twstat (Structure):
         ("fid", c_uint32),
     ]
 
-    def cdarclass (self):
+    def cdrmap (self):
         """
         Returns the ``p9msgarray`` as the type of the message tail ``stat``
         """
-        return p9msgarray
+        return [("stat", p9msgarray, 1)]
 
 class Rwstat (Structure):
     """
@@ -491,11 +475,11 @@ class Twrite (Structure):
         ("count", c_uint32),
     ]
 
-    def cdarclass (self):
+    def cdrmap (self):
         """
         Returns the ``(c_ubyte * count)`` as the type of the message tail ``data``
         """
-        return (c_ubyte * count)
+        return [("data", (c_ubyte * count), 1)]
 
 class Rwrite (Structure):
     """
