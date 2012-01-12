@@ -68,7 +68,7 @@ def errorreply (tmsg, emsg):
     Returns the Rerror message mempair object with a given
     error message for a given T-message
     """
-    replymsg = basereply(tmsg, 107)
+    replymsg = basereply(tmsg, Rerror._type)
     replymsg.ename.len = len(emsg)
     replymsg.ename.raw = emsg
     return replymsg
@@ -107,7 +107,7 @@ class p9socketworker(threading.Thread):
             if self.__sock.closed:
                 self.__sock.reply (errorreply (msg, "The server is closed"))
             
-            if msg.type == 100:
+            if msg.type == Tversion._type:
                 session.debug ("Requested 9P version: %s, maximum size: %i bytes" % (msg.version.raw, msg.msize))
                 (rver, rmsize) = self.getversion(msg.version.raw, msg.msize)
                 session.msize = rmsize
@@ -300,7 +300,7 @@ class p9session (threading.Thread):
                     self.debug ("%i bytes received" % l)
                 except IOError:
                     break
-                if msg.type == 108:
+                if msg.type == Tflush._type:
                     self.markflushed (msg.oldtag)
                     self.debug ("Flush the %i tag" % msg.oldtag)
                     self.reply (basereply(msg), False)
