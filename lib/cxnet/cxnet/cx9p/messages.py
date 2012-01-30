@@ -1,0 +1,545 @@
+
+"""
+9P protocol messages
+
+http://man.cat-v.org/plan_9/5/intro
+http://swtch.com/plan9port/man/man3/fcall.html
+"""
+
+#     Copyright (c) 2011 Peter V. Saveliev
+#     Copyright (c) 2011 Paul Wolneykien
+#
+#     This file is part of Connexion project.
+#
+#     Connexion is free software; you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation; either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     Connexion is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with Connexion; if not, write to the Free Software
+#     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+
+# ctypes types and functions
+from ctypes import c_ubyte, c_char, c_uint16, c_uint32, c_uint64
+
+# 9P uses little-endian meta data
+from ctypes import LittleEndianStructure as Structure
+
+# The maximum message size is 8192 bytes
+MAX_MSG_SIZE = 8192
+__all__ = ["MAX_MSG_SIZE"]
+
+# Normal (default) message size: 4096 bytes -- one memory page.
+NORM_MSG_SIZE = 4096
+__all__ += ["NORM_MSG_SIZE"]
+
+class p9msg (Structure):
+    """
+    A 9P message head.
+    """
+    _pack_ = 1
+    _fields_ = [
+        ("size", c_uint32),
+        ("type", c_ubyte),
+        ("tag", c_uint16),
+    ]
+    
+    def cdarclass (self):
+        """
+        Determines the message body class using the ``p9msgclasses``
+        tuple.
+        """
+        if self.type > 0 and self.type < len(p9msgclasses):
+            return p9msgclasses[self.type]
+        else:
+            raise ValueError("Unknown message type: %d" % (self.type))
+
+__all__ += ["p9msg"]
+
+class p9msgstring (Structure):
+    """
+    A 9P message string.
+    """
+    _pack_ = 1
+    _fields_ = [
+        ("len", c_uint16),
+    ]
+    
+    def cdarclass (self):
+        """
+        Returns a character array type of the corresponding length.
+        """
+        return c_char * self.len
+
+__all__ += ["p9msgstring"]
+
+class p9msgarray (Structure):
+    """
+    A 9P message array.
+    """
+    _pack_ = 1
+    _fields_ = [
+        ("len", c_uint16),
+    ]
+    
+    def cdarclass (self):
+        """
+        Returns a byte array type of the corresponding length.
+        """
+        return c_ubyte * self.len
+    
+__all__ += ["p9msgarray"]
+
+class p9qid (Structure):
+    """
+    The 9P qid type.
+
+    The qid represents the server's unique identification for the file
+    being accessed: two files on the same server hierarchy are the same
+    if and only if their qids are the same.
+    """
+    _pack_ = 1
+    _fields_ = [
+        ("type", c_ubyte),
+        ("version", c_uint32),
+        ("path", c_uint64),
+    ]
+
+__all__ += ["p9qid"]
+
+
+# Do not edit the following.
+# The following code is generated automatically from the
+# 9P manual pages and C header files.
+# See the `templates' branch for details.
+
+
+# The 9P version implemented
+VERSION9P = "9P2000"
+
+
+class Tcreate (Structure):
+    """
+    9P type 114 'create' request (transmit) message class
+    Open, create - prepare a fid for I/O on an existing or new file
+    """
+    _type = 114
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+    ]
+
+    class tail (Structure):
+        """
+        The static tail of the outer message class.
+        """
+        _pack_ = 1
+        _fields_ = [
+            ("perm", c_uint32),
+            ("mode", c_ubyte),
+        ]
+
+    def cdrmap (self):
+        """
+        Returns the map of the message tail:
+          * name ```p9msgstring```;
+          * _tail ```self.tail```.
+        """
+        return [("name", p9msgstring, 1), ("_tail", self.tail, 1)]
+
+class Rcreate (Structure):
+    """
+    9P type 115 'create' reply (return) message class
+    Open, create - prepare a fid for I/O on an existing or new file
+    """
+    _type = 115
+    _pack_ = 1
+    _fields_ = [
+        ("qid", p9qid),
+        ("iounit", c_uint32),
+    ]
+
+
+class Tremove (Structure):
+    """
+    9P type 122 'remove' request (transmit) message class
+    Remove - remove a file from a server
+    """
+    _type = 122
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+    ]
+
+class Rremove (Structure):
+    """
+    9P type 123 'remove' reply (return) message class
+    Remove - remove a file from a server
+    """
+    _type = 123
+
+
+class Tversion (Structure):
+    """
+    9P type 100 'version' request (transmit) message class
+    Version - negotiate protocol version
+    """
+    _type = 100
+    _pack_ = 1
+    _fields_ = [
+        ("msize", c_uint32),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the ``p9msgstring`` as the type of the message tail ``version``
+        """
+        return [("version", p9msgstring, 1)]
+
+class Rversion (Structure):
+    """
+    9P type 101 'version' reply (return) message class
+    Version - negotiate protocol version
+    """
+    _type = 101
+    _pack_ = 1
+    _fields_ = [
+        ("msize", c_uint32),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the ``p9msgstring`` as the type of the message tail ``version``
+        """
+        return [("version", p9msgstring, 1)]
+
+
+class Tstat (Structure):
+    """
+    9P type 124 'stat' request (transmit) message class
+    Stat, wstat - inquire or change file attributes
+    """
+    _type = 124
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+    ]
+
+class Rstat (Structure):
+    """
+    9P type 125 'stat' reply (return) message class
+    Stat, wstat - inquire or change file attributes
+    """
+    _type = 125
+
+    def cdrmap (self):
+        """
+        Returns the ``p9msgarray`` as the type of the message tail ``stat``
+        """
+        return [("stat", p9msgarray, 1)]
+
+
+class Tclunk (Structure):
+    """
+    9P type 120 'clunk' request (transmit) message class
+    Clunk - forget about a fid
+    """
+    _type = 120
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+    ]
+
+class Rclunk (Structure):
+    """
+    9P type 121 'clunk' reply (return) message class
+    Clunk - forget about a fid
+    """
+    _type = 121
+
+
+class Tauth (Structure):
+    """
+    9P type 102 'auth' request (transmit) message class
+    Attach, auth - messages to establish a connection
+    """
+    _type = 102
+    _pack_ = 1
+    _fields_ = [
+        ("afid", c_uint32),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the map of the message tail:
+          * uname ```p9msgstring```;
+          * aname ```p9msgstring```.
+        """
+        return [("uname", p9msgstring, 1), ("aname", p9msgstring, 1)]
+
+class Rauth (Structure):
+    """
+    9P type 103 'auth' reply (return) message class
+    Attach, auth - messages to establish a connection
+    """
+    _type = 103
+    _pack_ = 1
+    _fields_ = [
+        ("aqid", p9qid),
+    ]
+
+
+class Topen (Structure):
+    """
+    9P type 112 'open' request (transmit) message class
+    Open, create - prepare a fid for I/O on an existing or new file
+    """
+    _type = 112
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+        ("mode", c_ubyte),
+    ]
+
+class Ropen (Structure):
+    """
+    9P type 113 'open' reply (return) message class
+    Open, create - prepare a fid for I/O on an existing or new file
+    """
+    _type = 113
+    _pack_ = 1
+    _fields_ = [
+        ("qid", p9qid),
+        ("iounit", c_uint32),
+    ]
+
+
+class Tflush (Structure):
+    """
+    9P type 108 'flush' request (transmit) message class
+    Flush - abort a message
+    """
+    _type = 108
+    _pack_ = 1
+    _fields_ = [
+        ("oldtag", c_uint16),
+    ]
+
+class Rflush (Structure):
+    """
+    9P type 109 'flush' reply (return) message class
+    Flush - abort a message
+    """
+    _type = 109
+
+
+class Tread (Structure):
+    """
+    9P type 116 'read' request (transmit) message class
+    Read, write - transfer data from and to a file
+    """
+    _type = 116
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+        ("offset", c_uint64),
+        ("count", c_uint32),
+    ]
+
+class Rread (Structure):
+    """
+    9P type 117 'read' reply (return) message class
+    Read, write - transfer data from and to a file
+    """
+    _type = 117
+    _pack_ = 1
+    _fields_ = [
+        ("count", c_uint32),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the ``(c_ubyte * count)`` as the type of the message tail ``data``
+        """
+        return [("data", (c_ubyte * count), 1)]
+
+
+class Terror (Structure):
+    """
+    9P type 106 'error' request (transmit) message class
+    Error - return an error
+    Comment: illegal 
+    """
+    _type = 106
+
+class Rerror (Structure):
+    """
+    9P type 107 'error' reply (return) message class
+    Error - return an error
+    """
+    _type = 107
+
+    def cdrmap (self):
+        """
+        Returns the ``p9msgstring`` as the type of the message tail ``ename``
+        """
+        return [("ename", p9msgstring, 1)]
+
+
+class Twalk (Structure):
+    """
+    9P type 110 'walk' request (transmit) message class
+    Walk - descend a directory hierarchy
+    """
+    _type = 110
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+        ("newfid", c_uint32),
+        ("nwname", c_uint16),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the map of the message tail:
+          * wname ```p9msgstring``` * nwname.
+        """
+        return [("wname", p9msgstring, nwname)]
+
+class Rwalk (Structure):
+    """
+    9P type 111 'walk' reply (return) message class
+    Walk - descend a directory hierarchy
+    """
+    _type = 111
+    _pack_ = 1
+    _fields_ = [
+        ("nwqid", c_uint16),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the map of the message tail:
+          * qid ```p9qid``` * nwqid.
+        """
+        return [("qid", p9qid, nwqid)]
+
+
+class Tattach (Structure):
+    """
+    9P type 104 'attach' request (transmit) message class
+    Attach, auth - messages to establish a connection
+    """
+    _type = 104
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+        ("afid", c_uint32),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the map of the message tail:
+          * uname ```p9msgstring```;
+          * aname ```p9msgstring```.
+        """
+        return [("uname", p9msgstring, 1), ("aname", p9msgstring, 1)]
+
+class Rattach (Structure):
+    """
+    9P type 105 'attach' reply (return) message class
+    Attach, auth - messages to establish a connection
+    """
+    _type = 105
+    _pack_ = 1
+    _fields_ = [
+        ("qid", p9qid),
+    ]
+
+
+class Twstat (Structure):
+    """
+    9P type 126 'wstat' request (transmit) message class
+    Stat, wstat - inquire or change file attributes
+    """
+    _type = 126
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the ``p9msgarray`` as the type of the message tail ``stat``
+        """
+        return [("stat", p9msgarray, 1)]
+
+class Rwstat (Structure):
+    """
+    9P type 127 'wstat' reply (return) message class
+    Stat, wstat - inquire or change file attributes
+    """
+    _type = 127
+
+
+class Twrite (Structure):
+    """
+    9P type 118 'write' request (transmit) message class
+    Read, write - transfer data from and to a file
+    """
+    _type = 118
+    _pack_ = 1
+    _fields_ = [
+        ("fid", c_uint32),
+        ("offset", c_uint64),
+        ("count", c_uint32),
+    ]
+
+    def cdrmap (self):
+        """
+        Returns the ``(c_ubyte * count)`` as the type of the message tail ``data``
+        """
+        return [("data", (c_ubyte * count), 1)]
+
+class Rwrite (Structure):
+    """
+    9P type 119 'write' reply (return) message class
+    Read, write - transfer data from and to a file
+    """
+    _type = 119
+    _pack_ = 1
+    _fields_ = [
+        ("count", c_uint32),
+    ]
+
+# The tuple of all defined message classes
+p9msgclasses = tuple()
+p9msgclasses += tuple([None]*100) # Types for 0..99 are not defined
+p9msgclasses += tuple([Tversion, Rversion]) # 100, 101
+p9msgclasses += tuple([Tauth, Rauth]) # 102, 103
+p9msgclasses += tuple([Tattach, Rattach]) # 104, 105
+p9msgclasses += tuple([Terror, Rerror]) # 106, 107
+p9msgclasses += tuple([Tflush, Rflush]) # 108, 109
+p9msgclasses += tuple([Twalk, Rwalk]) # 110, 111
+p9msgclasses += tuple([Topen, Ropen]) # 112, 113
+p9msgclasses += tuple([Tcreate, Rcreate]) # 114, 115
+p9msgclasses += tuple([Tread, Rread]) # 116, 117
+p9msgclasses += tuple([Twrite, Rwrite]) # 118, 119
+p9msgclasses += tuple([Tclunk, Rclunk]) # 120, 121
+p9msgclasses += tuple([Tremove, Rremove]) # 122, 123
+p9msgclasses += tuple([Tstat, Rstat]) # 124, 125
+p9msgclasses += tuple([Twstat, Rwstat]) # 126, 127
+p9msgclasses += tuple([None]*128) # Types for 128..255 are not defined
+
+__all__ += ["p9msgclasses"]
+# Export some constants
+__all__ += ["VERSION9P"]
+# Export all defined message types
+__all__ += ["Tversion", "Rversion", "Tauth", "Rauth", "Tattach", "Rattach", "Terror", "Rerror", "Tflush", "Rflush", "Twalk", "Rwalk", "Topen", "Ropen", "Tcreate", "Rcreate", "Tread", "Rread", "Twrite", "Rwrite", "Tclunk", "Rclunk", "Tremove", "Rremove", "Tstat", "Rstat", "Twstat", "Rwstat"]
