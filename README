@@ -1,1 +1,3 @@
-This repo contains testing code for cxnet and py9p libraries
+The repo is archived, there will be no new commits.
+
+If you're looking for a network setup library, pls use pyroute2: https://github.com/svinota/pyroute2
